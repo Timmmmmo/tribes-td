@@ -1916,14 +1916,40 @@ function logicalToCell(x, y) {
 }
 
 // ---------------------------------------------------------------- 自适应
+// 取三种来源里最小的那个：有的环境（无头浏览器、部分安卓 WebView、微信 X5）
+// 的 innerWidth/innerHeight 会和真实可视区对不上，只看 inner* 会把画布撑出屏幕，
+// 右边和底下被裁掉。所以把 documentElement.client* 和 visualViewport 也一起比。
+function viewportSize() {
+  const de = document.documentElement;
+  const vv = window.visualViewport;
+  const ws = [];
+  const hs = [];
+  if (window.innerWidth > 0) ws.push(window.innerWidth);
+  if (window.innerHeight > 0) hs.push(window.innerHeight);
+  if (de && de.clientWidth > 0) ws.push(de.clientWidth);
+  if (de && de.clientHeight > 0) hs.push(de.clientHeight);
+  if (vv && vv.width > 0) ws.push(vv.width);
+  if (vv && vv.height > 0) hs.push(vv.height);
+  if (!ws.length) ws.push(LAYOUT.W);
+  if (!hs.length) hs.push(LAYOUT.H);
+  return { w: Math.min.apply(null, ws), h: Math.min.apply(null, hs) };
+}
+
 function resizeStage() {
-  const vw = window.innerWidth, vh = window.innerHeight;
+  const vp = viewportSize();
+  const vw = vp.w || LAYOUT.W, vh = vp.h || LAYOUT.H;
   const pad = vw > 620 ? 24 : 0;
-  const s = Math.min((vw - pad) / LAYOUT.W, (vh - pad) / LAYOUT.H);
+  const s = Math.max(0.2, Math.min((vw - pad) / LAYOUT.W, (vh - pad) / LAYOUT.H));
   stageEl.style.width = Math.floor(LAYOUT.W * s) + 'px';
   stageEl.style.height = Math.floor(LAYOUT.H * s) + 'px';
   // 大屏时给个圆角，手机上满屏
   stageEl.style.borderRadius = s < 0.98 ? '10px' : '0';
+}
+
+// 首帧可能还没量准（尤其是无头浏览器和横竖屏切换），多补几次
+function scheduleResize() {
+  resizeStage();
+  [60, 200, 600, 1500].forEach(ms => setTimeout(resizeStage, ms));
 }
 
 // ---------------------------------------------------------------- 命中测试
@@ -2088,9 +2114,9 @@ async function boot() {
   G.professions = raw.professions.filter(p => p.towers && p.towers.length);
   G.waves = raw.waves;
 
-  resizeStage();
+  scheduleResize();
   window.addEventListener('resize', resizeStage);
-  window.addEventListener('orientationchange', () => setTimeout(resizeStage, 120));
+  window.addEventListener('orientationchange', () => setTimeout(scheduleResize, 120));
 
   initRender(cvEl);
   resetGame();
