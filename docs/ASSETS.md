@@ -20,18 +20,20 @@ CC0 是公共领域贡献，商用、修改、免署名。我们仍在 `assets/s
 
 ## 字体
 
-不打包字体文件。运行时通过 `SystemFont` 按优先级查找系统字体：
+| 名称 | 地址 | 许可 | 用法 |
+|---|---|---|---|
+| Noto Sans SC | https://github.com/googlefonts/noto-cjk | **OFL 1.1** | 打包的中文子集 `assets/fonts/game_cjk.ttf`（175KB） |
 
-```
-Microsoft YaHei → 微软雅黑 (Windows)
-PingFang SC → 苹方 (macOS / iOS)
-Noto Sans CJK SC → 思源黑体 (Android / Linux)
-Source Han Sans SC
-WenQuanYi Micro Hei
-```
+**为什么必须打包**：Godot 的 Web 导出里 `SystemFont` 查不到宿主字体，中文会全部渲染成豆腐块。
+桌面端仍有系统字体优先，打包子集只作为 `fallback` 和 Web 端的主字体。
 
-**为什么不用 Godot 内置字体**：内置 fallback（OpenSans）不含 CJK 字符集，中文会全部显示成方块。
-这是 Godot 中文项目最常见的坑，`game/hud.gd::setup()` 里写了注释。
+**为什么是子集**：完整 Noto Sans SC 有 8MB，而本作用到的汉字一共 707 个。
+`tools/subset_font.py` 会扫描 `data/content.json` 与所有 `.gd` 里的文本，用
+`fontTools.subset` 裁出只含这些字的 TTF，实测 8136KB → 175KB。
+源字体（`assets/fonts/src_*.otf`）不进仓库，需要重新生成时按 README 下载即可。
+
+OFL 允许嵌入、修改、再分发，义务是保留版权声明与许可全文，且修改版本不得使用保留字体名。
+子集属于「修改版本」，因此输出文件命名为 `game_cjk.ttf` 而非 Noto 系列名。
 
 ## 明确排除的素材
 
