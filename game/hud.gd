@@ -69,6 +69,11 @@ func _process(_d: float) -> void:
 		queue_redraw()
 
 
+## 主场景画飘字（+金币之类）时要用同一套字体，否则中英文混排会跳字。
+func font() -> Font:
+	return _font
+
+
 # ------------------------------------------------------------------ 绘制
 
 func _draw() -> void:
@@ -97,87 +102,94 @@ func text_c(center_x: float, p_y: float, s: String, size: int, col: Color) -> vo
 
 func _draw_top() -> void:
 	var econ: TDEconomy = main.spawner.economy
-	draw_rect(Rect2(0, 0, W, TOP_H), PANEL)
-	draw_rect(Rect2(0, TOP_H - 2, W, 2), LINE)
 
-	# 金币 —— 主资源，最大字号
-	text(Vector2(24, 12), "金币", 15, DIM)
-	text(Vector2(24, 32), str(econ.gold), 40, AMBER)
+	# 顶栏：竖向渐变 + 底部一条亮线。纯色面板会让整个 HUD 看起来像没上色的线框图。
+	TDArt.fill_vgrad(self, TDArt.round_rect(Rect2(0, 0, W, TOP_H), 0.0, 1),
+		Color("#182735"), Color("#0E1822"), 0.0, TOP_H)
+	draw_line(Vector2(0, TOP_H - 1), Vector2(W, TOP_H - 1), Color("#2E4759"), 1.0)
+	draw_line(Vector2(0, TOP_H - 2), Vector2(W, TOP_H - 2), Color(1, 1, 1, 0.05), 1.0)
 
-	# 功勋 —— 第二资源，与金币并列同高，因为它是本作的核心
-	text(Vector2(190, 12), "功勋", 15, DIM)
-	text(Vector2(190, 32), str(main.merit.merit), 40, TEAL)
+	# 金币 —— 主资源，字号最大，配一个amber圆章
+	text(Vector2(26, 10), "金币", 15, DIM)
+	_resource_coin(Vector2(34, 52), 10.0, AMBER)
+	text(Vector2(50, 26), str(econ.gold), 38, AMBER)
+
+	# 功勋 —— 第二资源，与金币并列同高：它是本作的核心差异，不能画成附属品
+	text(Vector2(198, 10), "功勋", 15, DIM)
+	_resource_star(Vector2(206, 52), 10.0, TEAL)
+	text(Vector2(222, 26), str(main.merit.merit), 38, TEAL)
 
 	# 生命 / 波次 —— 右上
-	text_r(W - 24, 12, "生命", 15, DIM)
-	text_r(W - 24, 30, str(econ.lives), 34,
-		BAD if econ.lives <= 5 else TEXT)
-	text_r(W - 120, 12, "波次", 15, DIM)
-	text_r(W - 120, 34, "%d/%d" % [maxi(main.spawner.wave_index + 1, 0),
+	text_r(W - 24, 10, "生命", 15, DIM)
+	text_r(W - 24, 26, str(econ.lives), 34, BAD if econ.lives <= 5 else TEXT)
+	text_r(W - 122, 10, "波次", 15, DIM)
+	text_r(W - 122, 30, "%d/%d" % [maxi(main.spawner.wave_index + 1, 0),
 		main.spawner.waves.size()], 22, TEXT)
 
 	# 人口
 	var used: int = main.pop_used()
 	var cap: int = main.merit.pop_cap()
-	text(Vector2(24, 84), "人口 %d/%d" % [used, cap], 17,
-		BAD if used >= cap else TEXT)
+	text(Vector2(26, 72), "人口 %d/%d" % [used, cap], 17, BAD if used >= cap else TEXT)
 
-	# 下一档解锁进度
+	# 下一档解锁进度：一条带渐变的圆角进度条，快到的时候发光
 	var nxt: int = main.merit.next_locked_tier()
 	if nxt > 0:
 		var req: int = main.merit.required_merit(nxt)
 		var ratio: float = clampf(float(main.merit.merit) / float(maxi(req, 1)), 0.0, 1.0)
-		var bar := Rect2(150, 88, 220, 10)
-		draw_rect(bar, Color(0, 0, 0, 0.4))
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)), TEAL)
-		text(Vector2(150, 100), "第 %d 档 %d/%d 功勋 · 点此解锁" % [nxt, main.merit.merit, req],
-			13, DIM)
+		var bar := Rect2(150, 76, 220, 11)
+		TDArt.fill(self, TDArt.round_rect(bar, bar.size.y * 0.5, 6), Color(0, 0, 0, 0.45))
+		if ratio > 0.02:
+			var fr := Rect2(bar.position, Vector2(maxf(bar.size.x * ratio, bar.size.y), bar.size.y))
+			TDArt.fill_vgrad(self, TDArt.round_rect(fr, fr.size.y * 0.5, 6),
+				Color("#5BE0C8"), Color("#1B8D7E"), bar.position.y, fr.end.y)
+			if ratio > 0.85:
+				TDArt.glow(self, Vector2(bar.position.x + fr.size.x, bar.get_center().y),
+					26.0, Color(0.42, 0.95, 0.86, 0.35))
+		text(Vector2(150, 90), "第 %d 档 %d/%d 功勋 · 点此解锁" % [nxt, main.merit.merit, req],
+			12, DIM)
 	else:
-		text(Vector2(150, 88), "全部档位已解锁", 14, DIM)
+		text(Vector2(150, 84), "全部档位已解锁", 14, TEAL)
 
-	# 职业切换（两行文字，行距要够，否则「游侠」会压住「点击换部族」）
+	# 部族 chip：左边一条部族色，右上角给「点击换部族」的行内提示
 	var p: Dictionary = main.current_profession()
 	var chip := Rect2(W - 216, 72, 192, 48)
-	draw_rect(chip, PANEL_HI)
-	draw_rect(chip, LINE, false, 1.0)
-	draw_rect(Rect2(chip.position, Vector2(4, chip.size.y)),
-		Color(str(p.get("color", "#5BD1A6"))))
-	text(Vector2(chip.position.x + 14, chip.position.y + 5),
-		str(p.get("name", "部族")), 18, TEXT)
-	text(Vector2(chip.position.x + 14, chip.position.y + 28), "点击换部族", 11, DIM)
+	var pcol := Color(str(p.get("color", "#5BD1A6")))
+	_panel(chip, 12.0, Color("#213240"), Color("#17242E"), Color(0.18, 0.28, 0.36, 1.0))
+	TDArt.fill(self, TDArt.round_rect(Rect2(chip.position.x, chip.position.y, 5, chip.size.y), 2.5, 4),
+		pcol)
+	text(Vector2(chip.position.x + 16, chip.position.y + 6), str(p.get("name", "部族")), 18, TEXT)
+	text(Vector2(chip.position.x + 16, chip.position.y + 28), "点击换部族", 11, DIM)
 
 
 func _draw_actions() -> void:
 	var t: TDTower = main.selected_tower
 	if t == null or not is_instance_valid(t):
 		return
-	var def: Dictionary = main.content.tower_def(t.id)
-	draw_rect(Rect2(16, ACTION_Y, W - 32, ACTION_H), PANEL)
-	draw_rect(Rect2(16, ACTION_Y, W - 32, ACTION_H), LINE, false, 1.0)
+	var r := Rect2(16, ACTION_Y, W - 32, ACTION_H)
+	_panel(r, 14.0, Color("#1B2A37"), Color("#131E28"), LINE)
 
-	text(Vector2(34, ACTION_Y + 10), "%s  Lv.%d" % [t.display_name, t.level], 22, TEXT)
-	text(Vector2(34, ACTION_Y + 40),
-		"伤害 %.1f · 射程 %d · 击杀 %d" % [t.damage, int(t.range_px), t.kills],
-		14, DIM)
+	text(Vector2(34, ACTION_Y + 8), "%s  Lv.%d" % [t.display_name, t.level], 21, TEXT)
+	text(Vector2(34, ACTION_Y + 38),
+		"伤害 %.0f · 射程 %d · 击杀 %d" % [t.damage, int(t.range_px), t.kills], 14, DIM)
 
 	# 升级
 	var uc: int = t.upgrade_cost()
-	var up_rect := Rect2(W - 320, ACTION_Y + 12, 140, 54)
 	var can_up: bool = t.can_upgrade()
-	draw_rect(up_rect, PANEL_HI if can_up else Color("#1A2430"))
-	draw_rect(up_rect, TEAL if can_up else LINE, false, 1.0)
-	text_c(up_rect.position.x + up_rect.size.x * 0.5, up_rect.position.y + 10,
-		"升级", 17, TEXT if can_up else DIM)
-	text_c(up_rect.position.x + up_rect.size.x * 0.5, up_rect.position.y + 30,
+	var up_rect := Rect2(W - 320, ACTION_Y + 12, 140, 54)
+	if can_up:
+		_panel(up_rect, 12.0, Color("#1F4A47"), Color("#153230"), TEAL)
+		TDArt.glow(self, up_rect.get_center(), 70.0, Color(0.12, 0.62, 0.56, 0.22))
+	else:
+		_panel(up_rect, 12.0, Color("#1A2430"), Color("#141C24"), LINE)
+	text_c(up_rect.get_center().x, up_rect.position.y + 9, "升级", 17, TEXT if can_up else DIM)
+	text_c(up_rect.get_center().x, up_rect.position.y + 30,
 		("%d 金币" % uc) if can_up else "已满级", 13, AMBER if can_up else DIM)
 
 	# 出售
 	var sell_rect := Rect2(W - 168, ACTION_Y + 12, 136, 54)
-	draw_rect(sell_rect, Color("#2A1A1A"))
-	draw_rect(sell_rect, Color("#6B3030"), false, 1.0)
-	text_c(sell_rect.position.x + sell_rect.size.x * 0.5, sell_rect.position.y + 10,
-		"出售", 17, TEXT)
-	text_c(sell_rect.position.x + sell_rect.size.x * 0.5, sell_rect.position.y + 30,
+	_panel(sell_rect, 12.0, Color("#33201F"), Color("#221616"), Color("#6B3030"))
+	text_c(sell_rect.get_center().x, sell_rect.position.y + 9, "出售", 17, TEXT)
+	text_c(sell_rect.get_center().x, sell_rect.position.y + 30,
 		"+%d 金币" % t.sell_value(), 13, Color("#E0A0A0"))
 
 
@@ -201,29 +213,33 @@ func _draw_cards() -> void:
 		var selected: bool = main.build_id == id
 		var col := Color(str(def.get("color", "#8899AA")))
 
-		draw_rect(r, Color("#1A2733") if locked else PANEL)
-		if selected:
-			draw_rect(r, AMBER, false, 2.5)
+		if locked:
+			_panel(r, 12.0, Color("#182430"), Color("#121B24"), Color("#243543"))
 		else:
-			draw_rect(r, LINE, false, 1.0)
+			# 卡面染一层部族色，六张卡才有「六支部队」的差异感
+			_panel(r, 12.0, Color("#20303E").lerp(col, 0.14),
+				Color("#16232D").lerp(col, 0.06), Color("#2C4052").lerp(col, 0.18))
+		if selected:
+			TDArt.glow(self, r.get_center(), 74.0, Color(0.88, 0.66, 0.24, 0.30))
+			draw_polyline(TDArt.closed(TDArt.round_rect(r.grow(-1.0), 12.0, 6)), AMBER, 2.5, true)
 
-		# 档位角标
-		draw_rect(Rect2(x + 4, CARD_Y + 4, 22, 18), Color(col, 0.25 if locked else 1.0))
-		text(Vector2(x + 7, CARD_Y + 5), "T%d" % int(def.get("tier", 1)), 12,
-			TEXT if locked else Color("#0B1420"))
+		# 档位角标：圆角小chip，锁着的时候只给暗底
+		var badge := Rect2(x + 6, CARD_Y + 5, 26, 18)
+		TDArt.fill(self, TDArt.round_rect(badge, 6.0, 3),
+			Color(0.10, 0.14, 0.18, 1.0) if locked else col)
+		text_c(badge.get_center().x, badge.position.y + 1, "T%d" % int(def.get("tier", 1)), 11,
+			DIM if locked else Color("#0B1420"))
 
 		var label: String = str(def.get("name", "?"))
-		text_c(x + CARD_W * 0.5, CARD_Y + 28, label, 15,
-			DIM if locked else TEXT)
+		text_c(x + CARD_W * 0.5, CARD_Y + 28, label, 15, DIM if locked else TEXT)
 
 		if locked:
 			var req: int = main.merit.required_merit(int(def.get("tier", 1)))
-			text_c(x + CARD_W * 0.5, CARD_Y + 52, "需要", 11, DIM)
-			text_c(x + CARD_W * 0.5, CARD_Y + 66, "%d 功勋" % req, 12, TEAL)
+			text_c(x + CARD_W * 0.5, CARD_Y + 50, "需要", 11, DIM)
+			text_c(x + CARD_W * 0.5, CARD_Y + 64, "%d 功勋" % req, 12, TEAL)
 		else:
 			# JSON 里的数字都是 float，直接 str() 会显示成 "40.0"，先转 int
-			text_c(x + CARD_W * 0.5, CARD_Y + 52,
-				str(int(def.get("cost", 0))), 17, AMBER)
+			text_c(x + CARD_W * 0.5, CARD_Y + 50, str(int(def.get("cost", 0))), 18, AMBER)
 			text_c(x + CARD_W * 0.5, CARD_Y + 72,
 				"伤害 %d" % int(def.get("damage", 0)), 11, DIM)
 
@@ -241,13 +257,39 @@ func _draw_skills() -> void:
 		var x: float = x0 + float(i) * (w + gap)
 		var r := Rect2(x, SKILL_Y, w, SKILL_H)
 		var ok: bool = main.merit.can_afford(int(s["cost"]))
-		draw_rect(r, PANEL_HI if ok else Color("#1A2430"))
-		draw_rect(r, TEAL if ok else LINE, false, 1.0)
-		text_c(x + w * 0.5, SKILL_Y + 8, str(s["name"]), 19, TEXT if ok else DIM)
-		text_c(x + w * 0.5, SKILL_Y + 32, "%d 功勋" % int(s["cost"]), 13,
+		if ok:
+			_panel(r, 12.0, Color("#1C3A44"), Color("#142831"), TEAL)
+		else:
+			_panel(r, 12.0, Color("#182430"), Color("#121B24"), LINE)
+		text_c(r.get_center().x, SKILL_Y + 8, str(s["name"]), 19, TEXT if ok else DIM)
+		text_c(r.get_center().x, SKILL_Y + 34, "%d 功勋" % int(s["cost"]), 13,
 			TEAL if ok else DIM)
 		# 热键角标
-		text(Vector2(x + 6, SKILL_Y + 4), str(s.get("hotkey", i + 1)), 11, DIM)
+		text(Vector2(x + 7, SKILL_Y + 2), str(s.get("hotkey", i + 1)), 11, DIM)
+
+
+# ------------------------------------------------------------------ 绘制小工具
+
+## 玻璃面板：竖向渐变 + 一圈描边 + 顶边一条内高光。
+## 三条都要有，少一条就会退回「没上色的线框图」。
+func _panel(r: Rect2, rad: float, top_c: Color, bot_c: Color, border: Color) -> void:
+	var shape: PackedVector2Array = TDArt.round_rect(r, rad, 6)
+	TDArt.fill_vgrad(self, shape, top_c, bot_c, r.position.y, r.end.y)
+	draw_polyline(TDArt.closed(shape), border, 1.0, true)
+	draw_line(Vector2(r.position.x + rad, r.position.y + 1.2),
+		Vector2(r.end.x - rad, r.position.y + 1.2), Color(1, 1, 1, 0.07), 1.0)
+
+
+func _resource_coin(c: Vector2, r: float, col: Color) -> void:
+	TDArt.glow(self, c, r * 2.4, Color(col, 0.30))
+	draw_circle(c, r, col, true, -1.0, true)
+	draw_circle(c, r * 0.52, Color(0.06, 0.10, 0.14, 1.0), true, -1.0, true)
+	draw_circle(c, r * 0.52, Color(col, 0.9), false, 1.2, true)
+
+
+func _resource_star(c: Vector2, r: float, col: Color) -> void:
+	TDArt.glow(self, c, r * 2.4, Color(col, 0.30))
+	TDArt.fill(self, TDArt.star(c, r * 1.15, r * 0.44, 4), col)
 
 
 # ------------------------------------------------------------------ 命中测试

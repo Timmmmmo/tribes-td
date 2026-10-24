@@ -11,10 +11,10 @@
 | 版本 | 链接 | 说明 |
 |---|---|---|
 | **引擎版（Godot 4.7.2 导出）** | **https://timmmmmo.github.io/tribes-td/godot/** | 真正的 Godot 构建，38MB wasm，首屏要等几秒。加 `?demo=1` 看满编布防。 |
-| 轻量版（canvas 2D） | https://timmmmmo.github.io/tribes-td/ | 纯 JS，88KB 单文件，秒开。美术比引擎版好，因为它能全程序化绘制。 |
+| 轻量版（canvas 2D） | https://timmmmmo.github.io/tribes-td/ | 纯 JS，88KB 单文件，秒开。 |
 
-两个版本共用同一份数值表 `data/content.json`，规则完全一致。选哪个看你想要什么：
-想要「工程上确实是引擎在做」就开第一个，想要「画面好看、打开快」就开第二个。
+两个版本共用同一份数值表 `data/content.json`，规则完全一致。
+美术也都是**全程序化绘制、零图片依赖**——两边观感现在是一个档次的，区别只在体积和启动速度。
 
 GitHub Pages 托管，纯静态、无分享码、无鉴权、无 Cookie，转发多少手都不会坏。
 
@@ -129,11 +129,24 @@ GitHub Pages 这条路的好处：**没有分享码、没有鉴权、没有 Cook
 | 毒 / 弹射 / 眩晕的**真机制** | ⏳ 未做，当前用溅射 + 减速近似（见 ROADMAP） |
 | 局外养成（六条职业线）、异步 PvP | ⏳ 未开始（属于迭代三） |
 | 美术（Web 版） | ✅ 程序化绘制：地形预渲染、八边形石台塔、粒子、飘字、渐变 HUD |
-| 美术（Godot 版） | ⏳ 仍为占位（Kenney CC0 + 程序化形状） |
+| 美术（Godot 版） | ✅ 程序化绘制，与 Web 版同档：地形烘焙、石台/符文环、渐变塔身、敌人面部、玻璃面板 HUD |
 
-**重要说明**：本机没有安装 Godot 引擎，所以运行时行为**没有实机验证过**。
-已完成的是：`gdparse` 全量语法解析通过、`gdlint` 风格检查、数据一致性脚本校验（价位阶梯 / 路径正交 / 价位与档位对齐）。
-你第一次用 Godot 打开时需要先让它完成一次导入（见下），如果哪里跑不起来，把报错贴给我。
+**验证状态**：Godot 4.7.2 已实机跑通全链路，不再是「只过了语法检查」。
+
+| 环节 | 结果 |
+|---|---|
+| `--headless --import` | 通过，零错误 |
+| `--headless -s res://tests/run_tests.gd` | **PASS 128 checks, 0 failures** |
+| `--write-movie` 真实渲染 | 逐帧看过：地形分层、塔、敌人、特效、HUD 全部正常 |
+| `--headless --export-release "Web"` | 38MB wasm + 232KB pck（资源全程序化，pck 里只有数值表、字体、脚本） |
+| GitHub Pages 线上 | 已验证打开、可玩 |
+
+另外有一个「路径核对」脚本，用来证明敌人坐标和地图路径严丝合缝：
+
+```bash
+godot --headless --path . -s res://tests/dump_path.gd
+# 打印 13 个航点、43 个路径格、以及一只怪走完全程的逐帧坐标；最后一行 seam jumps: 0
+```
 
 ---
 
@@ -191,7 +204,8 @@ godot --headless --path . -s res://tests/run_tests.gd
 ```
 addons/td_core/     塔的放置/索敌/伤害、敌人寻路、波次调度（MIT，原样引用，未改动一行）
 game/merit.gd       功勋系统：第二资源 / 档位解锁 / 人口 / 主动技能   ← 本项目核心
-game/main.gd        状态机、输入、建造校验、棋盘与单位自绘
+game/art.gd         程序化美术层：地形烘焙、顶点色渐变、软光斑、几何构造
+game/main.gd        状态机、输入、建造校验、棋盘与单位自绘、特效层
 game/hud.gd         竖屏 HUD，全自绘 + 手动命中测试
 web/                可玩的 canvas 2D 版。index.html 是打包产物（单文件），源码在 web/src/
 web/src/js/         core.js（纯逻辑）/ render.js（全程序化绘制）/ main.js（引导与输入）
@@ -212,10 +226,14 @@ docs/               设计决策 / 迭代路线 / 素材许可
 | 用途 | 来源 | 许可 |
 |---|---|---|
 | 塔防核心逻辑 | [godot-tower-defense-core-lite](https://github.com/openclawaimac/godot-tower-defense-core-lite) | MIT |
-| 贴图（地面/士兵） | [Kenney Tower Defense Top-Down](https://kenney.nl/assets/tower-defense-top-down) | CC0 |
-| 中文 HUD 字体 | 系统字体（微软雅黑 / 苹方 / Noto Sans CJK），不打包字体文件 | — |
+| 中文 HUD 字体 | Noto Sans SC 子集（707 字 / 175KB，`tools/subset_font.py` 生成） | OFL 1.1 |
+| 美术 | 无外部素材，全部代码程序化绘制 | — |
 
-MIT 与 CC0 都可商用，无需署名（但我们仍在 `docs/ASSETS.md` 里记录了出处）。
+Godot 的 Web 导出里 `SystemFont` 查不到宿主字体，中文会全变豆腐块，
+所以必须打包一份子集。OFL 允许嵌入与修改，义务是保留许可全文、且修改版不得使用保留字体名
+（因此文件名是 `game_cjk.ttf` 而不是 Noto 系列名）。
+
+`assets/sprites/` 里还留着 10 张 Kenney CC0 参考图，但**代码已不引用**，导出时也被排除。
 **没有引入任何 GPL / CC-BY-SA 素材**，避免后续商业化时的传染性许可问题。
 
 美术是占位级别。真正的美术投入在立项之后，且必须重做世界观 —— 原版的「人族 / 雅典娜 / 魑魅魍魉」
@@ -225,9 +243,9 @@ MIT 与 CC0 都可商用，无需署名（但我们仍在 `docs/ASSETS.md` 里�
 
 ## 已知限制
 
-1. Godot 版的运行时行为没有实机验证（本机无 Godot 引擎）。首次导入出错请反馈。
-2. Godot 版塔与敌人是程序化形状 + Kenney 小图，不是成品美术；Web 版是全程序化绘制。
-3. 毒 / 弹射 / 眩晕只有近似，没有独立机制。
-4. 只有 1 张地图、1 个难度。原版的「灾厄 / 大灾变」难度阶梯未做。
-5. 没有存档、没有局外成长、没有联网。
-6. Web 版没有音效，也没有做多语言。
+1. 毒 / 弹射 / 眩晕只有近似（溅射 + 减速），没有独立机制。
+2. 只有 1 张地图、1 个难度。原版的「灾厄 / 大灾变」难度阶梯未做。
+3. 没有存档、没有局外成长、没有联网。
+4. 两个版本都没有音效，也没有做多语言。
+5. Godot Web 版关掉了多线程（`thread_support=false`）以避免 COOP/COEP 响应头，
+   换来的是「任何静态托管都能跑」，代价是首屏编译 38MB wasm 偏慢。

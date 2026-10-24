@@ -38,22 +38,21 @@ var status_text: String = ""
 var status_time: float = 0.0
 var wave_timer: float = 0.0
 
-var _tex_grass: Texture2D
-var _tex_dirt: Texture2D
-var _tex_enemy: Dictionary = {}
+## 渲染侧的全部状态。这些都不是玩法数据，所以不进 spawner/merit，
+## 清空重开时一起丢掉 —— 视觉残留留在新局里没有意义。
+var _terrain: ImageTexture
+var _time: float = 0.0
+var _shake: float = 0.0
+var _shake_off: Vector2 = Vector2.ZERO
+var _particles: Array[Dictionary] = []
+var _floaters: Array[Dictionary] = []
+var _rings: Array[Dictionary] = []
+var _beams: Array[Dictionary] = []
+var _flash: Dictionary = {}
 
 
 func _ready() -> void:
 	position = BOARD_ORIGIN
-	_tex_grass = load("res://assets/sprites/grass.png")
-	_tex_dirt = load("res://assets/sprites/dirt.png")
-	# 只 load 两次，五种敌人共用两张贴图（靠 modulate 区分），避免重复加载同一资源
-	var tex_green: Texture2D = load("res://assets/sprites/soldier_green.png")
-	var tex_brown: Texture2D = load("res://assets/sprites/soldier_brown.png")
-	for id: String in ["soldier", "brute", "boss"]:
-		_tex_enemy[id] = tex_green
-	for id: String in ["scout", "flyer"]:
-		_tex_enemy[id] = tex_brown
 	restart()
 
 
@@ -75,10 +74,20 @@ func restart() -> void:
 	spawner = TDWaveSpawner.new()
 	spawner.configure(content)
 	spawner.enemy_spawned.connect(_on_enemy_spawned)
+	spawner.tower_placed.connect(_on_tower_placed)
 	spawner.wave_cleared.connect(_on_wave_cleared)
 	spawner.all_waves_cleared.connect(_on_victory)
 	spawner.economy.defeated.connect(_on_defeat)
 	add_child(spawner)
+
+	# 地形是一张烘焙贴图，重开时重建（地图数据可能被改），其余视觉残留直接清掉
+	_terrain = TDArt.bake_map(spawner.map) if spawner.map != null else null
+	_particles.clear()
+	_floaters.clear()
+	_rings.clear()
+	_beams.clear()
+	_flash.clear()
+	_shake = 0.0
 
 	selected_tower = null
 	wave_timer = 0.0
@@ -169,6 +178,7 @@ func _process(delta: float) -> void:
 			spawner.enemies.size(), " ".join(parts).left(300)])
 	merit.sync_kills(spawner.towers, content, spawner.economy)
 	status_time = maxf(0.0, status_time - delta)
+	_tick_effects(delta)
 
 	# 本波清空后自动接下一波。手机端不做「手动点开始」，避免空转。
 	if not spawner.is_game_over() and spawner.enemies_left_in_wave() <= 0:
@@ -178,6 +188,69 @@ func _process(delta: float) -> void:
 				wave_timer = 0.0
 				spawner.start_next_wave()
 	queue_redraw()
+
+
+func _tick_effects(delta: float) -> void:
+	_time += delta
+	_shake = maxf(0.0, _shake - delta * 3.2)
+
+	var alive: Array[Dictionary] = []
+	for p: Dictionary in _particles:
+		p["t"] = float(p["t"]) + delta
+		if float(p["t"]) >= float(p["life"]):
+			continue
+		p["pos"] = (p["pos"] as Vector2) + (p["vel"] as Vector2) * delta
+		p["vel"] = (p["vel"] as Vector2) * (1.0 - 3.4 * delta)
+		alive.append(p)
+	_particles = alive
+
+	alive = []
+	for f: Dictionary in _floaters:
+		f["t"] = float(f["t"]) + delta
+		if float(f["t"]) >= float(f["life"]):
+			continue
+		f["pos"] = (f["pos"] as Vector2) + Vector2(0, -34.0 * delta)
+		alive.append(f)
+	_floaters = alive
+
+	alive = []
+	for r: Dictionary in _rings:
+		r["t"] = float(r["t"]) + delta
+		if float(r["t"]) < float(r["life"]):
+			alive.append(r)
+	_rings = alive
+
+	alive = []
+	for b: Dictionary in _beams:
+		b["t"] = float(b["t"]) + delta
+		if float(b["t"]) < float(b["life"]):
+			alive.append(b)
+	_beams = alive
+
+	for k: int in _flash.keys():
+		var v: float = float(_flash[k]) - delta
+		if v <= 0.0:
+			_flash.erase(k)
+		else:
+			_flash[k] = v
+
+
+func _spawn_burst(pos: Vector2, col: Color, n: int, power: float) -> void:
+	for i: int in range(n):
+		var a: float = TAU * (float(i) / float(maxi(n, 1))) + randf() * 0.5
+		var sp: float = power * (0.55 + randf() * 0.75)
+		_particles.append({
+			"pos": pos, "vel": Vector2(cos(a), sin(a)) * sp,
+			"life": 0.32 + randf() * 0.30, "t": 0.0,
+			"r": 1.4 + randf() * 2.4, "color": col,
+		})
+
+
+func _float_text(pos: Vector2, text: String, col: Color, size: int = 15) -> void:
+	_floaters.append({
+		"pos": pos, "text": text, "color": col, "size": size,
+		"life": 0.85, "t": 0.0,
+	})
 
 
 func toast(msg: String) -> void:
@@ -320,6 +393,45 @@ func _strongest_enemy() -> TDEnemy:
 
 func _on_enemy_spawned(e: TDEnemy) -> void:
 	e.debug_draw = false
+	e.damaged.connect(_on_enemy_damaged)
+	e.killed.connect(_on_enemy_killed)
+	e.leaked.connect(_on_enemy_leaked)
+
+
+func _on_tower_placed(t: TDTower) -> void:
+	# td_core 的塔默认会自绘「灰方块 + 射程圈」用于调试，正式渲染由本文件接管
+	t.debug_draw = false
+	t.fired.connect(_on_tower_fired.bind(t))
+
+
+func _on_tower_fired(target: TDEnemy, shooter: TDTower) -> void:
+	if target == null or shooter == null:
+		return
+	# 命中反馈只做两件事：一道衰减的光束 + 命中点的小火星。
+	# 常驻范围圈会让人看不清谁在打谁，所以只在开火那一瞬给信号。
+	var col: Color = Color(str(content.tower_def(shooter.id).get("color", "#8FD8FF"))).lightened(0.25)
+	_flash[shooter.get_instance_id()] = 0.09
+	_beams.append({
+		"from": shooter.position, "to": target.position,
+		"color": col, "life": 0.10, "t": 0.0,
+	})
+	_spawn_burst(target.position, col, 4, 90.0)
+
+
+func _on_enemy_damaged(e: TDEnemy, _amount: float) -> void:
+	_spawn_burst(e.position, Color(1, 1, 1, 0.85), 3, 70.0)
+
+
+func _on_enemy_killed(e: TDEnemy) -> void:
+	_spawn_burst(e.position, Color("#FFD98A"), 10, 150.0)
+	_rings.append({"pos": e.position, "r0": 6.0, "r1": 34.0,
+		"color": Color(1.0, 0.85, 0.5, 1.0), "life": 0.34, "t": 0.0})
+	# 赏金是这只怪给的，飘字挂在怪身上，玩家才能把「击杀 → 金币」连起来
+	_float_text(e.position + Vector2(0, -6), "+%d" % e.bounty, Color("#F2C14E"), 15)
+
+
+func _on_enemy_leaked(_e: TDEnemy) -> void:
+	_shake = 1.0
 
 
 func _on_wave_cleared(i: int) -> void:
@@ -396,6 +508,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 # ------------------------------------------------------------------ 渲染
+#
+# 分层顺序：背景 → 烘焙地形 → 棋盘框 → 路径流光 → 出生门/基地 → 网格
+#           → 悬停 → 塔 → 敌人 → 波纹 → 光束 → 粒子 → 飘字 → 选中环
+# 单位和塔都按 y 排序再画，靠前后遮挡骗出「俯视但立得住」的体积感。
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2(-BOARD_ORIGIN.x, -BOARD_ORIGIN.y), SCREEN), BG)
@@ -403,36 +519,107 @@ func _draw() -> void:
 	if spawner == null or spawner.map == null:
 		return
 
-	# 地面：Kenney 那两张草/土其实是纯色块，贴上去反而更平，所以直接按格子
-	# 铺底色 + 每格一点确定性微差，远看才有「草地不是一块油漆」的层次。
-	var map: TDMap = spawner.map
-	for x: int in range(9):
-		for y: int in range(15):
-			var v := 0.016 * float((x * 7 + y * 13) % 5)
-			draw_rect(Rect2(Vector2(x, y) * 64.0, Vector2(64, 64)),
-				Color(0.150 + v, 0.272 + v, 0.212 + v))
+	# 震屏只晃棋盘：HUD 挂在独立 CanvasLayer 上，天然不受影响
+	_shake_off = Vector2.ZERO
+	if _shake > 0.01:
+		_shake_off = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 9.0 * _shake
+	draw_set_transform(_shake_off)
 
-	# 路径：冷灰石板，比草地亮一档，靠明度差把路「抬」出来
-	for c: Vector2i in map.path_cells():
-		if not map.in_bounds(c):
-			continue
-		var r := Rect2(Vector2(c) * 64.0, Vector2(64, 64))
-		var pv := 0.014 * float((c.x * 11 + c.y * 5) % 4)
-		draw_rect(r, Color(0.208 + pv, 0.262 + pv, 0.325 + pv))
-		draw_rect(r, Color(0.34, 0.42, 0.52, 0.30), false, 1.0)
+	# 地形是一张烘焙贴图，一帧一次 draw call。2600 根草叶和 43 块石板已经在里面了。
+	if _terrain != null:
+		draw_texture_rect(_terrain, Rect2(Vector2.ZERO, BOARD_SIZE), false)
+	else:
+		draw_rect(Rect2(Vector2.ZERO, BOARD_SIZE), TDArt.GRASS_MID)
 
-	# 网格：只做很淡的参考线，别抢地面的戏
-	for x: int in range(10):
-		draw_line(Vector2(x * 64, 0), Vector2(x * 64, BOARD_SIZE.y),
-			Color(GRID_COLOR, 0.35), 1.0)
-	for y: int in range(16):
-		draw_line(Vector2(0, y * 64), Vector2(BOARD_SIZE.x, y * 64),
-			Color(GRID_COLOR, 0.35), 1.0)
-
+	_draw_board_frame()
+	_draw_path_flow()
+	_draw_gate_and_base()
+	_draw_grid()
 	_draw_hover()
 	_draw_towers()
 	_draw_enemies()
+	_draw_rings()
+	_draw_beams()
+	_draw_particles()
+	_draw_floaters()
 	_draw_selection()
+
+	draw_set_transform(Vector2.ZERO)
+
+
+func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	return TDArt.closed(pts)
+
+
+func _font() -> Font:
+	if hud != null and hud.has_method("font"):
+		return hud.font()
+	return null
+
+
+func _draw_board_frame() -> void:
+	# 两道框：外侧压暗把棋盘从背景里「切」出来，内侧一道冷光做边缘反射
+	draw_polyline(_closed(TDArt.round_rect(
+		Rect2(Vector2(-7, -7), BOARD_SIZE + Vector2(14, 14)), 16.0)),
+		Color(0.01, 0.02, 0.04, 0.85), 3.0, true)
+	draw_polyline(_closed(TDArt.round_rect(
+		Rect2(Vector2(-6, -6), BOARD_SIZE + Vector2(12, 12)), 15.0)),
+		Color(0.42, 0.62, 0.74, 0.20), 1.2, true)
+
+
+## 沿路径流动的光点 —— 不用文字说明也知道怪往哪边走。
+func _draw_path_flow() -> void:
+	var poly: PackedVector2Array = spawner.path
+	if poly.size() < 2:
+		return
+	var segs: Array[float] = []
+	var total: float = 0.0
+	for i: int in range(1, poly.size()):
+		var d: float = poly[i - 1].distance_to(poly[i])
+		segs.append(d)
+		total += d
+	if total <= 0.0:
+		return
+	for i: int in range(14):
+		var dist: float = fmod(_time * 46.0 + float(i) * total / 14.0, total)
+		var p: Vector2 = _sample_path(poly, segs, dist)
+		var a: float = 0.10 + 0.10 * sin(_time * 2.0 + float(i))
+		draw_circle(p, 2.6, Color(0.55, 0.78, 0.90, a), true, -1.0, true)
+
+
+func _draw_gate_and_base() -> void:
+	var poly: PackedVector2Array = spawner.path
+	if poly.size() < 2:
+		return
+	var pulse: float = 0.5 + 0.5 * sin(_time * 2.6)
+
+	# 出生门：红光。第一个航点在屏幕外，标记点取格内的第一个拐角。
+	var gate: Vector2 = Vector2(clampf(poly[1].x, 20.0, BOARD_SIZE.x - 20.0), poly[1].y)
+	TDArt.glow(self, gate, 54.0, Color(0.88, 0.29, 0.43, 0.42))
+	TDArt.glow(self, gate, 22.0 + pulse * 7.0, Color(0.95, 0.42, 0.52, 0.26))
+
+	# 基地：旋转的菱形水晶，越靠近越亮。
+	# 终点格 (3,15) 在棋盘下沿之外，要往里收 —— 否则一半挂在屏幕外，还会被 HUD 卡片压住。
+	var end: Vector2 = poly[poly.size() - 1]
+	var b: Vector2 = Vector2(clampf(end.x, 40.0, BOARD_SIZE.x - 40.0),
+		clampf(end.y, 40.0, BOARD_SIZE.y - 58.0))
+	TDArt.glow(self, b, 72.0, Color(0.35, 0.78, 1.0, 0.40))
+	draw_set_transform(_shake_off + b, _time * 0.6, Vector2.ONE)
+	for i: int in range(3):
+		var d: float = 20.0 - float(i) * 3.0
+		draw_polyline(_closed(PackedVector2Array([
+			Vector2(0, -d), Vector2(d * 0.7, 0), Vector2(0, d), Vector2(-d * 0.7, 0)])),
+			Color(0.47, 0.82, 1.0, 0.26 - float(i) * 0.06 + pulse * 0.12), 1.5, true)
+	draw_set_transform(_shake_off)
+
+
+## 网格只做极淡的参考线。之前它是「棋盘格感」的第二来源，现在降到几乎看不见。
+func _draw_grid() -> void:
+	var col := Color(0.47, 0.67, 0.78, 0.05)
+	for x: int in range(10):
+		draw_line(Vector2(x * 64, 0), Vector2(x * 64, BOARD_SIZE.y), col, 1.0)
+	for y: int in range(16):
+		draw_line(Vector2(0, y * 64), Vector2(BOARD_SIZE.x, y * 64), col, 1.0)
 
 
 func _draw_hover() -> void:
@@ -441,94 +628,279 @@ func _draw_hover() -> void:
 	var c: Vector2i = hover_cell
 	if not spawner.map.in_bounds(c):
 		return
-	var r := Rect2(Vector2(c) * 64.0, Vector2(64, 64))
+	var cell_rect := Rect2(Vector2(c) * 64.0, Vector2(64, 64)).grow(-2.0)
 	var ok: bool = build_block_reason(c) == "" and spawner.tower_at_cell(c) == null
-	draw_rect(r, Color(HOVER_OK, 0.16) if ok else Color(HOVER_BAD, 0.16))
-	draw_rect(r, HOVER_OK if ok else HOVER_BAD, false, 2.0)
+	var tint: Color = HOVER_OK if ok else HOVER_BAD
+	var shape: PackedVector2Array = TDArt.round_rect(cell_rect, 9.0)
+	TDArt.fill(self, shape, TDArt.rgba(tint, 0.14))
+	draw_polyline(_closed(shape), TDArt.rgba(tint, 0.85), 2.0, true)
+	if not ok:
+		return
 	# 范围预览：放下之前就告诉玩家能打到哪
-	if ok:
-		var rng: float = float(tower_def(build_id).get("range", 96))
-		draw_arc(Vector2(c) * 64.0 + Vector2(32, 32), rng, 0, TAU, 64,
-			Color(HOVER_OK, 0.35), 2.0)
-		draw_arc(Vector2(c) * 64.0 + Vector2(32, 32), rng, 0, TAU, 64,
-			Color(HOVER_OK, 0.10), 6.0)
+	var def: Dictionary = tower_def(build_id)
+	var rng: float = float(def.get("range", 96))
+	var col := Color(str(def.get("color", "#2ECC71")))
+	var center: Vector2 = Vector2(c) * 64.0 + Vector2(32, 32)
+	TDArt.glow(self, center, rng, TDArt.rgba(col, 0.09))
+	TDArt.dashed_ring(self, center, rng, TDArt.rgba(col, 0.55), 2.0, 22, _time * 0.6)
 
 
 func _draw_towers() -> void:
-	for t: TDTower in spawner.towers:
-		var def: Dictionary = content.tower_def(t.id)
-		var col := Color(str(def.get("color", "#8899AA")))
-		var shape := str(def.get("shape", "square"))
-		var p: Vector2 = t.position
-		var s: float = 19.0 + 3.0 * float(t.level)
-		# 射程：只在选中时显示，避免屏幕被圆环淹没
-		if t == selected_tower:
-			draw_arc(p, t.range_px, 0, TAU, 64, Color(col, 0.45), 2.0)
-		# 石台 + 投影：让塔有厚度，不是贴在地上的一块色
-		draw_circle(p + Vector2(0, 4), s * 1.06, Color(0, 0, 0, 0.35))
-		draw_circle(p, s * 1.06, Color(0.16, 0.20, 0.25))
-		draw_arc(p, s * 1.06, 0, TAU, 32, Color(col, 0.45), 1.5)
-		match shape:
-			"circle":
-				draw_circle(p, s, col)
-			"diamond":
-				draw_colored_polygon(PackedVector2Array([
-					p + Vector2(0, -s), p + Vector2(s, 0),
-					p + Vector2(0, s), p + Vector2(-s, 0)]), col)
-			"hex":
-				draw_colored_polygon(_poly(p, s, 6), col)
-			"star":
-				draw_colored_polygon(_poly(p, s * 1.15, 10), col)
-			_:
-				draw_rect(Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), col)
-		# 等级角标（只有升过级才显示，避免满屏小圆点）
-		if t.level > 1:
-			draw_circle(p + Vector2(s * 0.75, -s * 0.75), 8.0, Color("#0B1420"))
-			draw_circle(p + Vector2(s * 0.75, -s * 0.75), 6.0, col.lightened(0.35))
+	var sorted: Array = spawner.towers.duplicate()
+	sorted.sort_custom(func(a: TDTower, b: TDTower) -> bool: return a.position.y < b.position.y)
+	for t: TDTower in sorted:
+		_draw_tower(t)
+
+
+func _draw_tower(t: TDTower) -> void:
+	var def: Dictionary = content.tower_def(t.id)
+	var col := Color(str(def.get("color", "#8899AA")))
+	var shape := str(def.get("shape", "square"))
+	var p: Vector2 = t.position
+	var seed: float = float(t.get_instance_id() % 1000) * 0.017
+	var s: float = (20.0 + 2.4 * float(t.level)) * (1.0 + 0.03 * sin(_time * 2.2 + seed))
+
+	# 地面投影用椭圆：圆影子在俯视角里永远像贴着地面的一张纸
+	TDArt.fill(self, TDArt.ellipse(p + Vector2(0, s * 0.74), s * 0.94, s * 0.36),
+		Color(0, 0, 0, 0.42))
+
+	if t == selected_tower:
+		TDArt.glow(self, p, t.range_px, TDArt.rgba(col, 0.10))
+		TDArt.dashed_ring(self, p, t.range_px, TDArt.rgba(col, 0.62), 1.8, 26, -_time * 0.7, 0.5)
+
+	# 部族色光晕：一眼看出这座塔属于哪一支，比写文字快
+	TDArt.glow(self, p, t.range_px * 0.34, TDArt.rgba(col, 0.30))
+
+	# 八边形石台：上亮下暗的顶点色渐变 + 深色描边，压住场面
+	var plinth: PackedVector2Array = TDArt.ngon(p, s, 8, PI / 8.0)
+	TDArt.fill_vgrad(self, plinth, Color("#4C5F72"), Color("#12191F"), p.y - s, p.y + s)
+	draw_polyline(_closed(plinth), Color(0.01, 0.02, 0.04, 0.92), 2.0, true)
+	draw_polyline(_closed(TDArt.ngon(p, s * 0.90, 8, PI / 8.0)), TDArt.rgba(col, 0.44), 1.3, true)
+
+	# 四角铆钉：四个小亮点，石台立刻有「加工过」的感觉
+	for i: int in range(4):
+		var a: float = PI / 4.0 + PI * 0.5 * float(i)
+		draw_circle(p + Vector2(cos(a), sin(a)) * s * 0.80, 2.4,
+			Color(0.72, 0.84, 0.92, 0.55), true, -1.0, true)
+
+	# 符文环：慢速旋转的虚线，暗示这是座施法建筑而不是一块石头。
+	# 半径必须明显大于塔身（0.64s），否则会被塔身整个盖住 —— 第一版就是这样白画了。
+	TDArt.dashed_ring(self, p, s * 0.82, TDArt.rgba(col.lightened(0.35), 0.70), 1.6, 12,
+		_time * 0.5 + seed)
+
+	# 炮管先画，让它从塔身后面伸出来
+	_draw_barrel(t, p, s, col)
+
+	# 塔身
+	var bs: float = s * 0.64
+	var body: PackedVector2Array
+	match shape:
+		"circle":
+			body = TDArt.ellipse(p, bs, bs, 26)
+		"diamond":
+			body = TDArt.ngon(p, bs * 1.16, 4, 0.0)
+		"hex":
+			body = TDArt.ngon(p, bs * 1.06, 6, 0.0)
+		"star":
+			body = TDArt.star(p, bs * 1.20, bs * 0.56, 5)
+		_:
+			body = TDArt.round_rect(Rect2(p - Vector2(bs, bs), Vector2(bs, bs) * 2.0), bs * 0.34, 4)
+	# 塔身自带辉光：暗底上一块纯色完全没有体积，这层光就是「塑料感」和「发光体」的分界
+	TDArt.glow(self, p, bs * 2.1, TDArt.rgba(col, 0.45))
+	# 渐变区间要收窄：多边形顶点少（六边形只有 6 个），跨度一大就只剩混白和混黑，
+	# 中间那一档纯色反而不见了 —— 塔会整体发灰。
+	TDArt.fill_vgrad(self, body, TDArt.shade(col, 1.34), TDArt.shade(col, 0.52),
+		p.y - bs * 1.1, p.y + bs * 1.1)
+	draw_polyline(_closed(body), Color(0.01, 0.02, 0.04, 0.85), 2.2, true)
+
+	# 内高光：把同一个形状缩到 74% 描一圈白。比再烘一张贴图便宜，也不会糊。
+	var hl := PackedVector2Array()
+	for v: Vector2 in body:
+		hl.append(p + (v - p) * 0.74)
+	draw_polyline(_closed(hl), Color(1, 1, 1, 0.26), 1.2, true)
+	draw_circle(p, bs * 0.28, Color(1, 1, 1, 0.62), true, -1.0, true)
+
+	# 开火闪光
+	var flash: float = float(_flash.get(t.get_instance_id(), 0.0))
+	if flash > 0.0:
+		var k: float = flash / 0.09
+		TDArt.glow(self, p, s * 2.2 * k, Color(1, 1, 1, 0.45 * k))
+
+	# 等级徽章：只有升过级才出现，避免满屏数字
+	if t.level > 1:
+		var bp: Vector2 = p + Vector2(s * 0.74, s * 0.72)
+		draw_circle(bp, 9.5, Color(0.03, 0.06, 0.08, 0.95), true, -1.0, true)
+		draw_arc(bp, 9.5, 0, TAU, 20, TDArt.rgba(col, 0.90), 1.5, true)
+		var f: Font = _font()
+		if f != null:
+			draw_string(f, bp + Vector2(-9.5, 4.0), str(t.level),
+				HORIZONTAL_ALIGNMENT_CENTER, 19.0, 11, Color("#EAF4FF"))
+
+
+func _draw_barrel(t: TDTower, p: Vector2, s: float, col: Color) -> void:
+	var flash: float = float(_flash.get(t.get_instance_id(), 0.0))
+	var length: float = s * 1.06 * (1.0 + (flash / 0.09) * 0.26)
+	var base_x: float = s * 0.24
+	# 单独给炮管设一个旋转变换，形状本身按「沿 +x 方向伸出」来描述，代码短很多
+	draw_set_transform(_shake_off + p, t.aim_angle, Vector2.ONE)
+	var shell: PackedVector2Array = TDArt.round_rect(
+		Rect2(base_x, -s * 0.21, length, s * 0.42), s * 0.18, 4)
+	TDArt.fill_stroke(self, shell, Color("#141D25"), Color(0.01, 0.02, 0.04, 0.92), 1.6)
+	var inner: PackedVector2Array = TDArt.round_rect(
+		Rect2(base_x + 2.0, -s * 0.10, maxf(length - 5.0, 2.0), s * 0.20), s * 0.10, 3)
+	TDArt.fill(self, inner, TDArt.rgba(col, 0.85))
+	draw_circle(Vector2(base_x + length - 1.5, 0), s * 0.13,
+		TDArt.rgba(col.lightened(0.6), 0.95), true, -1.0, true)
+	draw_set_transform(_shake_off)
+
+
+func _enemy_color(id: StringName) -> Color:
+	match id:
+		&"brute":
+			return Color("#F0A878")
+		&"flyer":
+			return Color("#A8E0FF")
+		&"boss":
+			return Color("#FF8FA8")
+		&"scout":
+			return Color("#FFE98A")
+		_:
+			# 原来给的是 #EEF6FF，接近纯白 —— 渐变上下都是白，身体读不出体积，
+			# 远看就是一坨灰球。压到带蓝的浅灰，渐变才有空间。
+			return Color("#CBDCEA")
 
 
 func _draw_enemies() -> void:
-	for e: TDEnemy in spawner.enemies:
-		var p: Vector2 = e.position
-		var tex: Texture2D = _tex_enemy.get(str(e.id), null)
-		# 贴图是 Kenney 的两张基色图，靠 modulate 拉开辨识度。
-		# 之前用的都是暗色，叠在暗绿草地上糊成一团，这里统一提亮。
-		var col := Color("#EEF6FF")          # soldier
-		if e.id == &"brute":
-			col = Color("#F0A878")
-		elif e.id == &"flyer":
-			col = Color("#A8E0FF")
-		elif e.id == &"boss":
-			col = Color("#FF8FA8")
-		elif e.id == &"scout":
-			col = Color("#FFE98A")
-		if tex != null:
-			# 影子先把单位从地面「抬」起来，否则 40px 的贴图会糊在 64px 的格子里
-			draw_circle(p + Vector2(0, 7), 15.0, Color(0, 0, 0, 0.30))
-			draw_texture_rect(tex, Rect2(p - Vector2(20, 20), Vector2(40, 40)), false, col)
-		else:
-			draw_circle(p, 16.0, col)
-		if e.flying:
-			draw_arc(p, 24.0, 0, TAU, 24, Color(col, 0.5), 1.5)
-		# 血条
-		var ratio: float = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
-		var bar := Rect2(p + Vector2(-22, -33), Vector2(44, 5))
-		draw_rect(bar, Color(0, 0, 0, 0.6))
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 5)),
-			Color("#E74C3C").lerp(Color("#2ECC71"), ratio))
+	var sorted: Array = spawner.enemies.duplicate()
+	sorted.sort_custom(func(a: TDEnemy, b: TDEnemy) -> bool: return a.position.y < b.position.y)
+	for e: TDEnemy in sorted:
+		_draw_enemy(e)
+
+
+func _draw_enemy(e: TDEnemy) -> void:
+	var col := _enemy_color(e.id)
+	var boss: bool = e.id == &"boss"
+	var brute: bool = e.id == &"brute"
+	var base_r: float = 30.0 if boss else (21.0 if brute else 16.0)
+	var phase: float = float(e.get_instance_id() % 360) * 0.017
+	var bob: float = sin(_time * 4.0 + phase) * (4.0 if e.flying else 2.0)
+	# 飞行单位整体抬高，影子留在原地不跟着飘 —— 这是「离地」唯一有效的廉价信号
+	var p: Vector2 = e.position + Vector2(0, -10.0 + bob) if e.flying else e.position + Vector2(0, bob * 0.5)
+
+	TDArt.fill(self, TDArt.ellipse(Vector2(p.x, e.position.y + base_r * 0.92),
+		base_r * 0.82, base_r * 0.30), Color(0, 0, 0, 0.38))
+
+	if e.is_slowed():
+		TDArt.glow(self, p, base_r * 2.0, Color(0.51, 0.80, 1.0, 0.32))
+
+	# 五种敌人靠轮廓区分，不靠贴图 modulate —— 后者在 40px 尺度上根本看不出差别
+	var body: PackedVector2Array
+	if e.flying:
+		body = PackedVector2Array([p + Vector2(0, -base_r), p + Vector2(base_r * 0.95, 0),
+			p + Vector2(0, base_r * 0.8), p + Vector2(-base_r * 0.95, 0)])
+	elif brute:
+		body = TDArt.round_rect(Rect2(p - Vector2(base_r, base_r * 0.92),
+			Vector2(base_r * 2.0, base_r * 1.84)), base_r * 0.3, 4)
+	else:
+		body = TDArt.ellipse(p, base_r, base_r, 24)
+	TDArt.fill_vgrad(self, body, TDArt.shade(col, 1.38), TDArt.shade(col, 0.50),
+		p.y - base_r, p.y + base_r)
+	draw_polyline(_closed(body), Color(0.01, 0.03, 0.05, 0.85), 2.4, true)
+	# 底缘反光：一条比身体暗的弧，把「球」压成「球体」
+	draw_arc(p + Vector2(0, base_r * 0.16), base_r * 0.86, deg_to_rad(38.0), deg_to_rad(142.0),
+		14, TDArt.rgba(Color(0.06, 0.10, 0.16, 1.0), 0.30), 2.0, true)
+
+	TDArt.fill(self, TDArt.ellipse(p + Vector2(-base_r * 0.28, -base_r * 0.42),
+		base_r * 0.44, base_r * 0.30, 16), Color(1, 1, 1, 0.26))
+
+	# 眼睛跟着 heading 翻面，再加一道压眉 —— 有脸才像个兵，不是一块色
+	var fx: float = 1.0 if cos(e.heading) >= 0.0 else -1.0
+	var brow: Color = Color(0.03, 0.05, 0.08, 0.88)
+	for sgn: float in [-1.0, 1.0]:
+		var eye: Vector2 = p + Vector2((sgn * 0.30 + fx * 0.10) * base_r, -base_r * 0.06)
+		draw_circle(eye, base_r * 0.19, Color("#FFE9A6") if boss else Color("#F2F8FF"),
+			true, -1.0, true)
+		draw_circle(eye + Vector2(fx * base_r * 0.05, base_r * 0.02), base_r * 0.088,
+			Color("#0A1218"), true, -1.0, true)
+		draw_line(p + Vector2(sgn * base_r * 0.52, -base_r * 0.36),
+			p + Vector2(sgn * base_r * 0.10, -base_r * 0.16), brow,
+			maxf(1.3, base_r * 0.10), true)
+
+	if boss:
+		var pulse: float = 0.5 + 0.5 * sin(_time * 3.4)
+		draw_arc(p, base_r * (1.35 + pulse * 0.15), 0, TAU, 32,
+			Color(0.88, 0.29, 0.48, 0.35 + pulse * 0.30), 2.0, true)
+
+	# 血条：圆角 + 按比例换色，比一条纯色条更能读出「还剩多少」
+	var ratio: float = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
+	var bw: float = 74.0 if boss else (44.0 if brute else 36.0)
+	var bh: float = 7.0 if boss else 5.0
+	var bar := Rect2(p + Vector2(-bw * 0.5, -base_r - 6.0), Vector2(bw, bh))
+	TDArt.fill(self, TDArt.round_rect(bar.grow(1.5), (bh + 3.0) * 0.5),
+		Color(0, 0, 0, 0.62))
+	if ratio > 0.01:
+		var hc: Color = Color("#4BE08A")
+		if ratio <= 0.28:
+			hc = Color("#FF6B6B")
+		elif ratio <= 0.55:
+			hc = Color("#FFD166")
+		TDArt.fill(self, TDArt.round_rect(
+			Rect2(bar.position, Vector2(maxf(bw * ratio, bh), bh)), bh * 0.5), hc)
+
+
+func _draw_rings() -> void:
+	for r: Dictionary in _rings:
+		var k: float = float(r["t"]) / float(r["life"])
+		var rad: float = lerpf(float(r["r0"]), float(r["r1"]), k * k * 0.6 + k * 0.4)
+		draw_arc(r["pos"], rad, 0, TAU, 28,
+			TDArt.rgba(r["color"], (1.0 - k) * 0.85), maxf(0.6, 3.2 * (1.0 - k)), true)
+
+
+func _draw_beams() -> void:
+	for b: Dictionary in _beams:
+		var k: float = 1.0 - float(b["t"]) / float(b["life"])
+		draw_line(b["from"], b["to"], TDArt.rgba(b["color"], 0.75 * k), 3.0 * k, true)
+
+
+func _draw_particles() -> void:
+	for p: Dictionary in _particles:
+		var k: float = 1.0 - float(p["t"]) / float(p["life"])
+		var c: Color = p["color"]
+		draw_circle(p["pos"], float(p["r"]) * (0.4 + k * 0.8), TDArt.rgba(c, c.a * k),
+			true, -1.0, true)
+
+
+func _draw_floaters() -> void:
+	var f: Font = _font()
+	if f == null:
+		return
+	for it: Dictionary in _floaters:
+		var k: float = 1.0 - float(it["t"]) / float(it["life"])
+		var size: int = int(it["size"])
+		var txt: String = str(it["text"])
+		var pos: Vector2 = it["pos"]
+		var w: float = f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		var a: float = minf(1.0, k * 1.6)
+		# 先垫一层深色描边字，再叠主色，浅色飘字在草地上也能读
+		draw_string(f, pos + Vector2(-w * 0.5, 0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+			Color(0.02, 0.04, 0.06, a * 0.85))
+		draw_string(f, pos + Vector2(-w * 0.5, -1.2), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+			TDArt.rgba(it["color"], a))
 
 
 func _draw_selection() -> void:
 	var t: TDTower = selected_tower
 	if t == null or not is_instance_valid(t):
 		return
-	var p: Vector2 = t.position
-	draw_arc(p, 30.0, 0, TAU, 40, Color("#E0C05B"), 2.0)
+	var pulse: float = 0.5 + 0.5 * sin(_time * 4.0)
+	draw_arc(t.position, 30.0 + pulse * 2.5, 0, TAU, 40,
+		Color(0.88, 0.75, 0.36, 0.90), 2.0, true)
 
 
-func _poly(center: Vector2, r: float, n: int) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i: int in range(n):
-		var a: float = -PI / 2.0 + TAU * float(i) / float(n)
-		pts.append(center + Vector2(cos(a), sin(a)) * r)
-	return pts
+func _sample_path(poly: PackedVector2Array, segs: Array[float], dist: float) -> Vector2:
+	var left: float = dist
+	for i: int in range(segs.size()):
+		if left <= segs[i]:
+			return poly[i].lerp(poly[i + 1], left / maxf(segs[i], 0.001))
+		left -= segs[i]
+	return poly[poly.size() - 1]
