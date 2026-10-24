@@ -52,13 +52,19 @@ iOS 严格隐私模式都会），子请求就 403，直接白屏。内联之后
 
 ### 想改成自己的 GitHub Pages
 
-仓库里已经放好了 `.github/workflows/pages.yml`，推上去就能用。一条命令：
+仓库里已经放好了 `.github/workflows/pages.yml`，推上去就能用。
+
+**有 PAT 就一条命令**（需要 Classic token 的 `repo` + `workflow` 权限）：
 
 ```bash
-bash tools/push_github.sh <你的账号>/tribes-td
+GH_TOKEN=ghp_xxx bash tools/deploy_github.sh tribes-td
 ```
 
-脚本会重新打包、建好 remote、提交并推送。手动也行：
+脚本会验 token、建仓库、推 main、开 Pages、等构建，最后直接把
+`https://<账号>.github.io/tribes-td/` 打印出来。token 少了 `workflow` 权限时，
+它会自动退化成「把 `web/` 推到 `gh-pages` 分支 + 分支模式开 Pages」，一样出链接。
+
+没 token 就手动：
 
 ```bash
 git init -b main && git add . && git commit -m "Tribes TD"
