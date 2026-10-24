@@ -1,0 +1,12 @@
+# Godot 导入缓存与临时产物
+.godot/
+*.import.tmp
+export_presets.cfg
+
+# 参考仓库（体积大，且不是本项目代码，只在做架构调研时临时用）
+_ref/
+
+# 本地导出
+build/
+*.apk
+*.aab

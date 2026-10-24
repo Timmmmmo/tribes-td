@@ -1,0 +1,1699 @@
+{
+ "start_gold": 150,
+ "lives": 20,
+ "hp_scale_per_wave": 1.14,
+ "towers": [
+  {
+   "id": "r1",
+   "name": "箭手",
+   "desc": "射速快、伤害低。前期铺三个就能过前三波。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 3,
+   "range": 132,
+   "interval": 0.5,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#32735B",
+   "shape": "circle",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 4.3,
+     "range": 144,
+     "interval": 0.455
+    },
+    {
+     "cost": 64,
+     "damage": 5.5,
+     "range": 156,
+     "interval": 0.41
+    },
+    {
+     "cost": 84,
+     "damage": 6.8,
+     "range": 168,
+     "interval": 0.365
+    }
+   ]
+  },
+  {
+   "id": "r2",
+   "name": "毒羽",
+   "desc": "命中附带减速，打不死也拖得住。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 5.5,
+   "range": 145,
+   "interval": 0.45,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 0.78,
+   "slow_time": 1.6,
+   "color": "#42856D",
+   "shape": "circle",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 7.8,
+     "range": 157,
+     "interval": 0.41
+    },
+    {
+     "cost": 144,
+     "damage": 10.1,
+     "range": 169,
+     "interval": 0.369
+    },
+    {
+     "cost": 189,
+     "damage": 12.4,
+     "range": 181,
+     "interval": 0.329
+    }
+   ]
+  },
+  {
+   "id": "r3",
+   "name": "猎鹰哨",
+   "desc": "射程拉长，能同时覆盖两段路。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 9,
+   "range": 175,
+   "interval": 0.42,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#53987F",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 12.8,
+     "range": 187,
+     "interval": 0.382
+    },
+    {
+     "cost": 304,
+     "damage": 16.6,
+     "range": 199,
+     "interval": 0.344
+    },
+    {
+     "cost": 399,
+     "damage": 20.3,
+     "range": 211,
+     "interval": 0.307
+    }
+   ]
+  },
+  {
+   "id": "r4",
+   "name": "穿云手",
+   "desc": "单点高伤，专治重甲。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 22,
+   "range": 190,
+   "interval": 0.55,
+   "targeting": "strongest",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#63AA90",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 31.2,
+     "range": 202,
+     "interval": 0.501
+    },
+    {
+     "cost": 640,
+     "damage": 40.5,
+     "range": 214,
+     "interval": 0.451
+    },
+    {
+     "cost": 840,
+     "damage": 49.7,
+     "range": 226,
+     "interval": 0.402
+    }
+   ]
+  },
+  {
+   "id": "r5",
+   "name": "冰晶塔",
+   "desc": "大范围减速，是整条防线的骨架。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 16,
+   "range": 168,
+   "interval": 0.38,
+   "targeting": "first",
+   "splash": 52,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 0.62,
+   "slow_time": 2.2,
+   "color": "#74BCA2",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 22.7,
+     "range": 180,
+     "interval": 0.346
+    },
+    {
+     "cost": 1360,
+     "damage": 29.4,
+     "range": 192,
+     "interval": 0.312
+    },
+    {
+     "cost": 1785,
+     "damage": 36.2,
+     "range": 204,
+     "interval": 0.277
+    }
+   ]
+  },
+  {
+   "id": "r6",
+   "name": "后羿",
+   "desc": "全图最远的单体，BOSS 波的主力。",
+   "cost": 1800,
+   "tier": 6,
+   "damage": 58,
+   "range": 240,
+   "interval": 0.62,
+   "targeting": "strongest",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#84CFB4",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 1980,
+     "damage": 82.4,
+     "range": 252,
+     "interval": 0.564
+    },
+    {
+     "cost": 2880,
+     "damage": 106.7,
+     "range": 264,
+     "interval": 0.508
+    },
+    {
+     "cost": 3780,
+     "damage": 131.1,
+     "range": 276,
+     "interval": 0.453
+    }
+   ]
+  },
+  {
+   "id": "r7",
+   "name": "射日台",
+   "desc": "一次三连，溅射 + 长射程。终局单位。",
+   "cost": 3800,
+   "tier": 7,
+   "damage": 96,
+   "range": 260,
+   "interval": 0.7,
+   "targeting": "first",
+   "splash": 70,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#94E1C5",
+   "shape": "star",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 4180,
+     "damage": 136.3,
+     "range": 272,
+     "interval": 0.637
+    },
+    {
+     "cost": 6080,
+     "damage": 176.6,
+     "range": 284,
+     "interval": 0.574
+    },
+    {
+     "cost": 7980,
+     "damage": 217.0,
+     "range": 296,
+     "interval": 0.511
+    }
+   ]
+  },
+  {
+   "id": "o1",
+   "name": "学徒",
+   "desc": "单体 6 点，慢，但便宜到可以堆。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 6,
+   "range": 120,
+   "interval": 0.95,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#61447B",
+   "shape": "square",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 8.5,
+     "range": 132,
+     "interval": 0.864
+    },
+    {
+     "cost": 64,
+     "damage": 11.0,
+     "range": 144,
+     "interval": 0.779
+    },
+    {
+     "cost": 84,
+     "damage": 13.6,
+     "range": 156,
+     "interval": 0.694
+    }
+   ]
+  },
+  {
+   "id": "o2",
+   "name": "暴风术士",
+   "desc": "小范围溅射，第一波就够用。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 11,
+   "range": 128,
+   "interval": 0.88,
+   "targeting": "first",
+   "splash": 40,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#73558E",
+   "shape": "square",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 15.6,
+     "range": 140,
+     "interval": 0.801
+    },
+    {
+     "cost": 144,
+     "damage": 20.2,
+     "range": 152,
+     "interval": 0.722
+    },
+    {
+     "cost": 189,
+     "damage": 24.9,
+     "range": 164,
+     "interval": 0.642
+    }
+   ]
+  },
+  {
+   "id": "o3",
+   "name": "凤凰",
+   "desc": "大范围持续灼烧（以溅射近似）。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 19,
+   "range": 140,
+   "interval": 0.82,
+   "targeting": "first",
+   "splash": 64,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#8466A0",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 27.0,
+     "range": 152,
+     "interval": 0.746
+    },
+    {
+     "cost": 304,
+     "damage": 35.0,
+     "range": 164,
+     "interval": 0.672
+    },
+    {
+     "cost": 399,
+     "damage": 42.9,
+     "range": 176,
+     "interval": 0.599
+    }
+   ]
+  },
+  {
+   "id": "o4",
+   "name": "波浪术士",
+   "desc": "范围再放大，清杂核心。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 38,
+   "range": 152,
+   "interval": 0.92,
+   "targeting": "first",
+   "splash": 88,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#9676B3",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 54.0,
+     "range": 164,
+     "interval": 0.837
+    },
+    {
+     "cost": 640,
+     "damage": 69.9,
+     "range": 176,
+     "interval": 0.754
+    },
+    {
+     "cost": 840,
+     "damage": 85.9,
+     "range": 188,
+     "interval": 0.672
+    }
+   ]
+  },
+  {
+   "id": "o5",
+   "name": "魔法院长",
+   "desc": "终极法术，一次清半屏。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 74,
+   "range": 170,
+   "interval": 1.05,
+   "targeting": "first",
+   "splash": 110,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#A887C6",
+   "shape": "star",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 105.1,
+     "range": 182,
+     "interval": 0.956
+    },
+    {
+     "cost": 1360,
+     "damage": 136.2,
+     "range": 194,
+     "interval": 0.861
+    },
+    {
+     "cost": 1785,
+     "damage": 167.2,
+     "range": 206,
+     "interval": 0.766
+    }
+   ]
+  },
+  {
+   "id": "h1",
+   "name": "小猎手",
+   "desc": "射程一般，但能打空中。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 4,
+   "range": 138,
+   "interval": 0.62,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#7B6A32",
+   "shape": "square",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 5.7,
+     "range": 150,
+     "interval": 0.564
+    },
+    {
+     "cost": 64,
+     "damage": 7.4,
+     "range": 162,
+     "interval": 0.508
+    },
+    {
+     "cost": 84,
+     "damage": 9.0,
+     "range": 174,
+     "interval": 0.453
+    }
+   ]
+  },
+  {
+   "id": "h2",
+   "name": "鹰眼",
+   "desc": "射程拉到 160，优先打最前面的。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 7,
+   "range": 160,
+   "interval": 0.58,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#8E7C42",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 9.9,
+     "range": 172,
+     "interval": 0.528
+    },
+    {
+     "cost": 144,
+     "damage": 12.9,
+     "range": 184,
+     "interval": 0.476
+    },
+    {
+     "cost": 189,
+     "damage": 15.8,
+     "range": 196,
+     "interval": 0.423
+    }
+   ]
+  },
+  {
+   "id": "h3",
+   "name": "高级猎手",
+   "desc": "伤害翻倍，仍保持高射速。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 13,
+   "range": 172,
+   "interval": 0.52,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#A08E53",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 18.5,
+     "range": 184,
+     "interval": 0.473
+    },
+    {
+     "cost": 304,
+     "damage": 23.9,
+     "range": 196,
+     "interval": 0.426
+    },
+    {
+     "cost": 399,
+     "damage": 29.4,
+     "range": 208,
+     "interval": 0.38
+    }
+   ]
+  },
+  {
+   "id": "h4",
+   "name": "狼王",
+   "desc": "对空特化，飞行波不会翻车。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 27,
+   "range": 185,
+   "interval": 0.5,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#B3A063",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 38.3,
+     "range": 197,
+     "interval": 0.455
+    },
+    {
+     "cost": 640,
+     "damage": 49.7,
+     "range": 209,
+     "interval": 0.41
+    },
+    {
+     "cost": 840,
+     "damage": 61.0,
+     "range": 221,
+     "interval": 0.365
+    }
+   ]
+  },
+  {
+   "id": "h5",
+   "name": "猎王",
+   "desc": "超远射程，站后排也能打满全场。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 52,
+   "range": 215,
+   "interval": 0.45,
+   "targeting": "strongest",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#C6B274",
+   "shape": "star",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 73.8,
+     "range": 227,
+     "interval": 0.41
+    },
+    {
+     "cost": 1360,
+     "damage": 95.7,
+     "range": 239,
+     "interval": 0.369
+    },
+    {
+     "cost": 1785,
+     "damage": 117.5,
+     "range": 251,
+     "interval": 0.329
+    }
+   ]
+  },
+  {
+   "id": "g1",
+   "name": "扒手",
+   "desc": "打得很轻，但每杀一个多给 2 金币。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 2.5,
+   "range": 118,
+   "interval": 0.42,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#7B4432",
+   "shape": "square",
+   "bonus_gold": 2,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 3.5,
+     "range": 130,
+     "interval": 0.382
+    },
+    {
+     "cost": 64,
+     "damage": 4.6,
+     "range": 142,
+     "interval": 0.344
+    },
+    {
+     "cost": 84,
+     "damage": 5.6,
+     "range": 154,
+     "interval": 0.307
+    }
+   ]
+  },
+  {
+   "id": "g2",
+   "name": "小强",
+   "desc": "攻速极快，靠数量吃钱。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 4.2,
+   "range": 124,
+   "interval": 0.34,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#8E5542",
+   "shape": "circle",
+   "bonus_gold": 3,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 6.0,
+     "range": 136,
+     "interval": 0.309
+    },
+    {
+     "cost": 144,
+     "damage": 7.7,
+     "range": 148,
+     "interval": 0.279
+    },
+    {
+     "cost": 189,
+     "damage": 9.5,
+     "range": 160,
+     "interval": 0.248
+    }
+   ]
+  },
+  {
+   "id": "g3",
+   "name": "强盗",
+   "desc": "单次伤害上来，经济开始滚。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 8.5,
+   "range": 134,
+   "interval": 0.36,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#A06653",
+   "shape": "diamond",
+   "bonus_gold": 4,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 12.1,
+     "range": 146,
+     "interval": 0.328
+    },
+    {
+     "cost": 304,
+     "damage": 15.6,
+     "range": 158,
+     "interval": 0.295
+    },
+    {
+     "cost": 399,
+     "damage": 19.2,
+     "range": 170,
+     "interval": 0.263
+    }
+   ]
+  },
+  {
+   "id": "g4",
+   "name": "魔法大盗",
+   "desc": "偷取效率翻倍，滚雪球的关键。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 15,
+   "range": 142,
+   "interval": 0.34,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#B37663",
+   "shape": "hex",
+   "bonus_gold": 7,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 21.3,
+     "range": 154,
+     "interval": 0.309
+    },
+    {
+     "cost": 640,
+     "damage": 27.6,
+     "range": 166,
+     "interval": 0.279
+    },
+    {
+     "cost": 840,
+     "damage": 33.9,
+     "range": 178,
+     "interval": 0.248
+    }
+   ]
+  },
+  {
+   "id": "g5",
+   "name": "剑圣",
+   "desc": "终局单位，钱越多它越强。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 34,
+   "range": 150,
+   "interval": 0.28,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#C68774",
+   "shape": "star",
+   "bonus_gold": 12,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 48.3,
+     "range": 162,
+     "interval": 0.255
+    },
+    {
+     "cost": 1360,
+     "damage": 62.6,
+     "range": 174,
+     "interval": 0.23
+    },
+    {
+     "cost": 1785,
+     "damage": 76.8,
+     "range": 186,
+     "interval": 0.204
+    }
+   ]
+  },
+  {
+   "id": "b1",
+   "name": "苦工",
+   "desc": "射程只有 100，但伤害是同价两倍。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 7,
+   "range": 100,
+   "interval": 0.85,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#732929",
+   "shape": "square",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 9.9,
+     "range": 112,
+     "interval": 0.773
+    },
+    {
+     "cost": 64,
+     "damage": 12.9,
+     "range": 124,
+     "interval": 0.697
+    },
+    {
+     "cost": 84,
+     "damage": 15.8,
+     "range": 136,
+     "interval": 0.62
+    }
+   ]
+  },
+  {
+   "id": "b2",
+   "name": "打手",
+   "desc": "短射程高伤，靠位置换输出。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 14,
+   "range": 106,
+   "interval": 0.8,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#853939",
+   "shape": "circle",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 19.9,
+     "range": 118,
+     "interval": 0.728
+    },
+    {
+     "cost": 144,
+     "damage": 25.8,
+     "range": 130,
+     "interval": 0.656
+    },
+    {
+     "cost": 189,
+     "damage": 31.6,
+     "range": 142,
+     "interval": 0.584
+    }
+   ]
+  },
+  {
+   "id": "b3",
+   "name": "猛男",
+   "desc": "命中带强减速，贴身缠住怪。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 24,
+   "range": 112,
+   "interval": 0.78,
+   "targeting": "first",
+   "splash": 30,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 0.72,
+   "slow_time": 1.2,
+   "color": "#984A4A",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 34.1,
+     "range": 124,
+     "interval": 0.71
+    },
+    {
+     "cost": 304,
+     "damage": 44.2,
+     "range": 136,
+     "interval": 0.64
+    },
+    {
+     "cost": 399,
+     "damage": 54.2,
+     "range": 148,
+     "interval": 0.569
+    }
+   ]
+  },
+  {
+   "id": "b4",
+   "name": "拳击手",
+   "desc": "范围击退（以溅射 + 减速近似）。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 44,
+   "range": 120,
+   "interval": 0.82,
+   "targeting": "first",
+   "splash": 48,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 0.8,
+   "slow_time": 1.0,
+   "color": "#AA5A5A",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 62.5,
+     "range": 132,
+     "interval": 0.746
+    },
+    {
+     "cost": 640,
+     "damage": 81.0,
+     "range": 144,
+     "interval": 0.672
+    },
+    {
+     "cost": 840,
+     "damage": 99.4,
+     "range": 156,
+     "interval": 0.599
+    }
+   ]
+  },
+  {
+   "id": "b5",
+   "name": "拳王",
+   "desc": "近身最强单体，BOSS 波的答案。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 88,
+   "range": 128,
+   "interval": 0.9,
+   "targeting": "strongest",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#BC6A6A",
+   "shape": "star",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 125.0,
+     "range": 140,
+     "interval": 0.819
+    },
+    {
+     "cost": 1360,
+     "damage": 161.9,
+     "range": 152,
+     "interval": 0.738
+    },
+    {
+     "cost": 1785,
+     "damage": 198.9,
+     "range": 164,
+     "interval": 0.657
+    }
+   ]
+  },
+  {
+   "id": "s1",
+   "name": "见习剑士",
+   "desc": "均衡，没有明显短板。",
+   "cost": 40,
+   "tier": 1,
+   "damage": 5,
+   "range": 128,
+   "interval": 0.66,
+   "targeting": "first",
+   "splash": 0,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#32557B",
+   "shape": "square",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 44,
+     "damage": 7.1,
+     "range": 140,
+     "interval": 0.601
+    },
+    {
+     "cost": 64,
+     "damage": 9.2,
+     "range": 152,
+     "interval": 0.541
+    },
+    {
+     "cost": 84,
+     "damage": 11.3,
+     "range": 164,
+     "interval": 0.482
+    }
+   ]
+  },
+  {
+   "id": "s2",
+   "name": "魔剑士",
+   "desc": "攻击附带小范围波及。",
+   "cost": 90,
+   "tier": 2,
+   "damage": 10,
+   "range": 140,
+   "interval": 0.62,
+   "targeting": "first",
+   "splash": 34,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#42678E",
+   "shape": "circle",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 99,
+     "damage": 14.2,
+     "range": 152,
+     "interval": 0.564
+    },
+    {
+     "cost": 144,
+     "damage": 18.4,
+     "range": 164,
+     "interval": 0.508
+    },
+    {
+     "cost": 189,
+     "damage": 22.6,
+     "range": 176,
+     "interval": 0.453
+    }
+   ]
+  },
+  {
+   "id": "s3",
+   "name": "狼骑士",
+   "desc": "射程长 + 溅射，适合放后排。",
+   "cost": 190,
+   "tier": 3,
+   "damage": 18,
+   "range": 168,
+   "interval": 0.6,
+   "targeting": "first",
+   "splash": 44,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#5378A0",
+   "shape": "diamond",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 209,
+     "damage": 25.6,
+     "range": 180,
+     "interval": 0.546
+    },
+    {
+     "cost": 304,
+     "damage": 33.1,
+     "range": 192,
+     "interval": 0.492
+    },
+    {
+     "cost": 399,
+     "damage": 40.7,
+     "range": 204,
+     "interval": 0.438
+    }
+   ]
+  },
+  {
+   "id": "s4",
+   "name": "喷火兵",
+   "desc": "大范围清场，克小怪海。",
+   "cost": 400,
+   "tier": 4,
+   "damage": 33,
+   "range": 148,
+   "interval": 0.7,
+   "targeting": "first",
+   "splash": 76,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#638AB3",
+   "shape": "hex",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 440,
+     "damage": 46.9,
+     "range": 160,
+     "interval": 0.637
+    },
+    {
+     "cost": 640,
+     "damage": 60.7,
+     "range": 172,
+     "interval": 0.574
+    },
+    {
+     "cost": 840,
+     "damage": 74.6,
+     "range": 184,
+     "interval": 0.511
+    }
+   ]
+  },
+  {
+   "id": "s5",
+   "name": "剑咏宗师",
+   "desc": "终极形态，溅射 100 的终局单位。",
+   "cost": 850,
+   "tier": 5,
+   "damage": 66,
+   "range": 160,
+   "interval": 0.75,
+   "targeting": "first",
+   "splash": 100,
+   "hits_air": true,
+   "hits_ground": true,
+   "slow": 1.0,
+   "slow_time": 0.0,
+   "color": "#749BC6",
+   "shape": "star",
+   "bonus_gold": 0,
+   "levels": [
+    {
+     "cost": 935,
+     "damage": 93.7,
+     "range": 172,
+     "interval": 0.682
+    },
+    {
+     "cost": 1360,
+     "damage": 121.4,
+     "range": 184,
+     "interval": 0.615
+    },
+    {
+     "cost": 1785,
+     "damage": 149.2,
+     "range": 196,
+     "interval": 0.547
+    }
+   ]
+  }
+ ],
+ "enemies": [
+  {
+   "id": "soldier",
+   "name": "步兵",
+   "hp": 42,
+   "speed": 54,
+   "armor": 0,
+   "bounty": 6,
+   "leak": 1,
+   "flying": false
+  },
+  {
+   "id": "scout",
+   "name": "斥候",
+   "hp": 26,
+   "speed": 96,
+   "armor": 0,
+   "bounty": 5,
+   "leak": 1,
+   "flying": false
+  },
+  {
+   "id": "brute",
+   "name": "重装",
+   "hp": 165,
+   "speed": 38,
+   "armor": 3,
+   "bounty": 14,
+   "leak": 2,
+   "flying": false
+  },
+  {
+   "id": "flyer",
+   "name": "飞行",
+   "hp": 58,
+   "speed": 82,
+   "armor": 1,
+   "bounty": 8,
+   "leak": 1,
+   "flying": true
+  },
+  {
+   "id": "boss",
+   "name": "雅典娜化身",
+   "hp": 1750,
+   "speed": 30,
+   "armor": 6,
+   "bounty": 130,
+   "leak": 6,
+   "flying": false
+  }
+ ],
+ "waves": [
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 6,
+     "interval": 0.9
+    }
+   ],
+   "bonus": 22
+  },
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 8,
+     "interval": 0.8
+    }
+   ],
+   "bonus": 26
+  },
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 6,
+     "interval": 0.8
+    },
+    {
+     "enemy": "scout",
+     "count": 5,
+     "interval": 0.5
+    }
+   ],
+   "bonus": 30
+  },
+  {
+   "groups": [
+    {
+     "enemy": "scout",
+     "count": 12,
+     "interval": 0.42
+    }
+   ],
+   "bonus": 34
+  },
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 10,
+     "interval": 0.7
+    },
+    {
+     "enemy": "flyer",
+     "count": 4,
+     "interval": 0.9
+    }
+   ],
+   "bonus": 40
+  },
+  {
+   "groups": [
+    {
+     "enemy": "brute",
+     "count": 4,
+     "interval": 1.3
+    },
+    {
+     "enemy": "soldier",
+     "count": 8,
+     "interval": 0.6
+    }
+   ],
+   "bonus": 48
+  },
+  {
+   "groups": [
+    {
+     "enemy": "flyer",
+     "count": 10,
+     "interval": 0.55
+    }
+   ],
+   "bonus": 52
+  },
+  {
+   "groups": [
+    {
+     "enemy": "brute",
+     "count": 6,
+     "interval": 1.1
+    },
+    {
+     "enemy": "scout",
+     "count": 10,
+     "interval": 0.4
+    }
+   ],
+   "bonus": 58
+  },
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 16,
+     "interval": 0.45
+    },
+    {
+     "enemy": "flyer",
+     "count": 6,
+     "interval": 0.7
+    }
+   ],
+   "bonus": 64
+  },
+  {
+   "groups": [
+    {
+     "enemy": "brute",
+     "count": 8,
+     "interval": 1.0
+    },
+    {
+     "enemy": "brute",
+     "count": 4,
+     "interval": 1.0
+    }
+   ],
+   "bonus": 72
+  },
+  {
+   "groups": [
+    {
+     "enemy": "flyer",
+     "count": 14,
+     "interval": 0.45
+    },
+    {
+     "enemy": "scout",
+     "count": 14,
+     "interval": 0.35
+    }
+   ],
+   "bonus": 78
+  },
+  {
+   "groups": [
+    {
+     "enemy": "brute",
+     "count": 10,
+     "interval": 0.9
+    },
+    {
+     "enemy": "flyer",
+     "count": 8,
+     "interval": 0.6
+    }
+   ],
+   "bonus": 86
+  },
+  {
+   "groups": [
+    {
+     "enemy": "soldier",
+     "count": 24,
+     "interval": 0.35
+    },
+    {
+     "enemy": "brute",
+     "count": 8,
+     "interval": 0.9
+    }
+   ],
+   "bonus": 92
+  },
+  {
+   "groups": [
+    {
+     "enemy": "brute",
+     "count": 14,
+     "interval": 0.8
+    },
+    {
+     "enemy": "flyer",
+     "count": 12,
+     "interval": 0.5
+    }
+   ],
+   "bonus": 104
+  },
+  {
+   "groups": [
+    {
+     "enemy": "boss",
+     "count": 1,
+     "interval": 1.0
+    },
+    {
+     "enemy": "brute",
+     "count": 10,
+     "interval": 0.9
+    },
+    {
+     "enemy": "flyer",
+     "count": 10,
+     "interval": 0.6
+    }
+   ],
+   "bonus": 160
+  }
+ ],
+ "map": {
+  "cols": 9,
+  "rows": 15,
+  "cell": 64,
+  "path": [
+   [
+    -1,
+    1
+   ],
+   [
+    2,
+    1
+   ],
+   [
+    2,
+    4
+   ],
+   [
+    6,
+    4
+   ],
+   [
+    6,
+    1
+   ],
+   [
+    7,
+    1
+   ],
+   [
+    7,
+    7
+   ],
+   [
+    2,
+    7
+   ],
+   [
+    2,
+    10
+   ],
+   [
+    7,
+    10
+   ],
+   [
+    7,
+    13
+   ],
+   [
+    3,
+    13
+   ],
+   [
+    3,
+    15
+   ]
+  ],
+  "blocked": [
+   [
+    0,
+    5
+   ],
+   [
+    8,
+    3
+   ],
+   [
+    1,
+    9
+   ],
+   [
+    5,
+    9
+   ],
+   [
+    8,
+    11
+   ],
+   [
+    0,
+    14
+   ],
+   [
+    4,
+    6
+   ]
+  ]
+ },
+ "tier_prices": [
+  40,
+  90,
+  190,
+  400,
+  850,
+  1800,
+  3800
+ ],
+ "professions": [
+  {
+   "id": "ranger",
+   "name": "游侠",
+   "color": "#5BD1A6",
+   "towers": [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7"
+   ],
+   "desc": "低伤高攻速 + 减速，前期最强"
+  },
+  {
+   "id": "occult",
+   "name": "咒术",
+   "color": "#B07BE0",
+   "towers": [
+    "o1",
+    "o2",
+    "o3",
+    "o4",
+    "o5"
+   ],
+   "desc": "高伤低攻速 + 大溅射，清杂最快"
+  },
+  {
+   "id": "hunter",
+   "name": "猎手",
+   "color": "#E0C05B",
+   "towers": [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5"
+   ],
+   "desc": "中伤高射程 + 对空，飞行波不翻车"
+  },
+  {
+   "id": "rogue",
+   "name": "盗贼",
+   "color": "#E07B5B",
+   "towers": [
+    "g1",
+    "g2",
+    "g3",
+    "g4",
+    "g5"
+   ],
+   "desc": "低伤 + 击杀额外金币，滚雪球"
+  },
+  {
+   "id": "berserk",
+   "name": "狂战",
+   "color": "#D14B4B",
+   "towers": [
+    "b1",
+    "b2",
+    "b3",
+    "b4",
+    "b5"
+   ],
+   "desc": "短射程高伤 + 强减速，靠位置换输出"
+  },
+  {
+   "id": "spell",
+   "name": "剑咏",
+   "color": "#5B9BE0",
+   "towers": [
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5"
+   ],
+   "desc": "均衡 + 范围，需要与游侠配对"
+  }
+ ]
+}

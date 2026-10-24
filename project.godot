@@ -1,0 +1,30 @@
+; Engine configuration file.
+; 六部族塔防（Tribes TD）—— 竖屏 720×1280，OpenGL 兼容渲染，面向中低端安卓机。
+
+config_version=5
+
+[application]
+
+config/name="Tribes TD"
+config/description="双资源塔防：金币管现在有多少塔，功勋管塔能长到多高。"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+window/handheld/orientation=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.043, 0.078, 0.125, 1)
