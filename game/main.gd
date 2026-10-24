@@ -158,6 +158,15 @@ func _first_unlocked_tower() -> StringName:
 func _process(delta: float) -> void:
 	if spawner == null:
 		return
+	# 排查用：加 --trace-enemies 会每 2 秒打印场上所有敌人的坐标，
+	# 用来核对「地图画出来的路」和「敌人实际走的路」是否一致。
+	if OS.get_cmdline_args().has("--trace-enemies") and Engine.get_process_frames() % 120 == 0:
+		var parts: Array[String] = []
+		for e1: TDEnemy in spawner.enemies:
+			parts.append("%s@%s" % [str(e1.id), str(e1.position.round())])
+		print("[trace] f=%d wave=%d onfield=%d %s" % [
+			Engine.get_process_frames(), spawner.wave_index,
+			spawner.enemies.size(), " ".join(parts).left(300)])
 	merit.sync_kills(spawner.towers, content, spawner.economy)
 	status_time = maxf(0.0, status_time - delta)
 
