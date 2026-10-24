@@ -172,14 +172,20 @@ async function boot() {
   bootBar.style.width = '22%';
 
   let raw;
-  try {
-    const res = await fetch('content.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    raw = await res.json();
-  } catch (e) {
-    bootErr.textContent = '加载内容数据失败：' + e.message +
-      '\n如果是从本地 file:// 打开的，请改用 http 服务（例如 python -m http.server）。';
-    return;
+  if (window.__CONTENT__) {
+    // 单文件构建：数据已内联，零网络请求（打包路径）
+    raw = window.__CONTENT__;
+  } else {
+    const url = window.__CONTENT_URL__ || 'content.json';
+    try {
+      const res = await fetch(url, { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      raw = await res.json();
+    } catch (e) {
+      bootErr.textContent = '加载内容数据失败：' + e.message +
+        '\n请改用 http 服务打开（例如 python -m http.server），或直接打开打包好的单文件版本。';
+      return;
+    }
   }
   bootBar.style.width = '60%';
 

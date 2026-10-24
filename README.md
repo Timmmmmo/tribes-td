@@ -24,13 +24,21 @@
 
 ### Web 版怎么跑
 
+`web/index.html` 是**打包产物**（单文件，把所有 JS 和数值表内联进去，整页只发 1 个请求）。
+源码在 `web/src/`：
+
 ```bash
-cd web
-python -m http.server 8123
-# 打开 http://127.0.0.1:8123
+python tools/build_web.py      # 改完源码跑一次，生成 web/index.html
+
+# 开发时可以直接开 web/dev.html，它仍然分开加载 src/，改完刷新就见效
+cd web && python -m http.server 8123
+# 打开 http://127.0.0.1:8123/dev.html
 ```
 
-> 必须用 http 起，不能双击 `index.html` —— 页面要 `fetch('content.json')`，`file://` 会被浏览器拦。
+**为什么要打成单文件？** 因为托管方的分享链接是「用 `?sharecode=` 换一个 Cookie 才放行子资源」的。
+页面如果再去请求 `js/core.js`、`content.json`，而浏览器不落这个 Cookie（微信内置浏览器、
+iOS 严格隐私模式都会），子请求就 403，直接白屏。内联之后零子请求，任何环境都能开——
+顺带 `file://` 双击也能玩，不需要起服务。
 
 ### 想改成自己的 GitHub Pages
 
@@ -124,7 +132,9 @@ addons/td_core/     塔的放置/索敌/伤害、敌人寻路、波次调度（M
 game/merit.gd       功勋系统：第二资源 / 档位解锁 / 人口 / 主动技能   ← 本项目核心
 game/main.gd        状态机、输入、建造校验、棋盘与单位自绘
 game/hud.gd         竖屏 HUD，全自绘 + 手动命中测试
-web/                可玩的 canvas 2D 版（index.html + js/{core,render,main}.js + content.json）
+web/                可玩的 canvas 2D 版。index.html 是打包产物（单文件），源码在 web/src/
+web/src/js/         core.js（纯逻辑）/ render.js（全程序化绘制）/ main.js（引导与输入）
+tools/build_web.py  把 web/src 内联成单文件 index.html
 data/content.json   数值表（由 tools/gen_content.py 生成，不要手改）
 tools/gen_content.py 数值生成器，带自查断言
 tests/run_tests.gd  headless 自测

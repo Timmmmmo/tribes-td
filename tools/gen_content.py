@@ -254,9 +254,18 @@ DATA = {
 if __name__ == "__main__":
     out = os.path.join(ROOT, "data", "content.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    body = json.dumps(DATA, ensure_ascii=False, indent=1)
     with io.open(out, "w", encoding="utf-8") as f:
-        json.dump(DATA, f, ensure_ascii=False, indent=1)
+        f.write(body)
     print("wrote %s" % out)
+
+    # Web 版吃同一份表：写进 web/src/，再由 tools/build_web.py 内联进单文件 index.html
+    web_src = os.path.join(ROOT, "web", "src")
+    if os.path.isdir(web_src):
+        wout = os.path.join(web_src, "content.json")
+        with io.open(wout, "w", encoding="utf-8") as f:
+            f.write(body)
+        print("wrote %s" % wout)
     print("towers=%d enemies=%d waves=%d" % (len(TOWERS), len(ENEMIES), len(WAVES)))
 
     p = MAP["path"]
