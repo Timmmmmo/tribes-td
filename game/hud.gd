@@ -28,8 +28,17 @@ const BAD := Color("#E15555")
 ## 表示「这次输入不是按下」的哨兵坐标
 const NO_POS := Vector2(-9999, -9999)
 
+## 中文必须显式给字体：Godot 内置 fallback 不含 CJK，会显示方块。
+## 桌面端用系统字体（雅黑/苹方），Web 端拿不到系统字体，必须用打包的中文子集，
+## 否则整屏都是豆腐块。子集由 tools/subset_font.py 生成，只留游戏里用到的字。
+const FONT_BUNDLED := "res://assets/fonts/game_cjk.ttf"
+const FONT_NAMES := [
+	"Microsoft YaHei", "微软雅黑", "PingFang SC", "Noto Sans CJK SC",
+	"Source Han Sans SC", "WenQuanYi Micro Hei", "sans-serif",
+]
+
 var main: Node2D
-var _font: SystemFont
+var _font: Font
 var _drag_target: String = ""
 
 
@@ -37,13 +46,22 @@ func setup(m: Node2D) -> void:
 	main = m
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = SystemFont.new()
-	# 中文必须显式给字体族：Godot 内置 fallback 不含 CJK，会显示方块。
-	_font.font_names = PackedStringArray([
-		"Microsoft YaHei", "微软雅黑", "PingFang SC", "Noto Sans CJK SC",
-		"Source Han Sans SC", "WenQuanYi Micro Hei", "sans-serif",
-	])
-	_font.font_weight = 400
+
+	var bundled: Font = null
+	if ResourceLoader.exists(FONT_BUNDLED):
+		bundled = load(FONT_BUNDLED) as Font
+
+	if OS.has_feature("web") and bundled != null:
+		# Web 里没有系统字体可查，直接用打包子集，最确定
+		_font = bundled
+	else:
+		var sf := SystemFont.new()
+		sf.font_names = PackedStringArray(FONT_NAMES)
+		sf.font_weight = 400
+		if bundled != null:
+			# 桌面上万一系统缺字，也有兜底
+			sf.fallbacks = [bundled]
+		_font = sf
 
 
 func _process(_d: float) -> void:
@@ -117,16 +135,16 @@ func _draw_top() -> void:
 	else:
 		text(Vector2(150, 88), "全部档位已解锁", 14, DIM)
 
-	# 职业切换
+	# 职业切换（两行文字，行距要够，否则「游侠」会压住「点击换部族」）
 	var p: Dictionary = main.current_profession()
-	var chip := Rect2(W - 216, 78, 192, 40)
+	var chip := Rect2(W - 216, 72, 192, 48)
 	draw_rect(chip, PANEL_HI)
 	draw_rect(chip, LINE, false, 1.0)
 	draw_rect(Rect2(chip.position, Vector2(4, chip.size.y)),
 		Color(str(p.get("color", "#5BD1A6"))))
-	text(Vector2(chip.position.x + 14, chip.position.y + 8),
+	text(Vector2(chip.position.x + 14, chip.position.y + 5),
 		str(p.get("name", "部族")), 18, TEXT)
-	text(Vector2(chip.position.x + 14, chip.position.y + 26), "点击换部族", 11, DIM)
+	text(Vector2(chip.position.x + 14, chip.position.y + 28), "点击换部族", 11, DIM)
 
 
 func _draw_actions() -> void:
@@ -203,8 +221,9 @@ func _draw_cards() -> void:
 			text_c(x + CARD_W * 0.5, CARD_Y + 52, "需要", 11, DIM)
 			text_c(x + CARD_W * 0.5, CARD_Y + 66, "%d 功勋" % req, 12, TEAL)
 		else:
+			# JSON 里的数字都是 float，直接 str() 会显示成 "40.0"，先转 int
 			text_c(x + CARD_W * 0.5, CARD_Y + 52,
-				str(def.get("cost", 0)), 17, AMBER)
+				str(int(def.get("cost", 0))), 17, AMBER)
 			text_c(x + CARD_W * 0.5, CARD_Y + 72,
 				"伤害 %d" % int(def.get("damage", 0)), 11, DIM)
 

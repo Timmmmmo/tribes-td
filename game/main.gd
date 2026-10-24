@@ -84,6 +84,40 @@ func restart() -> void:
 	wave_timer = 0.0
 	toast("选一个部族，点地图造塔。塔的击杀会攒功勋。")
 	_ensure_hud()
+	if _demo_requested():
+		_apply_demo()
+
+
+## 演示模式：命令行加 `--demo`，或网页加 `?demo=1`。
+## 自动布防 + 给足资源，用来截图、录片、给评审一眼看终局，不影响正常开局。
+func _demo_requested() -> bool:
+	if "--demo" in OS.get_cmdline_args():
+		return true
+	if OS.has_feature("web"):
+		var q: Variant = JavaScriptBridge.eval("location.search", true)
+		if q is String and (q as String).contains("demo"):
+			return true
+	return false
+
+
+func _apply_demo() -> void:
+	spawner.economy.earn(9000)
+	merit.add(1000)
+	for tier: int in [2, 3, 4, 5, 6, 7]:
+		merit.try_unlock(tier)
+	# 六部族各来一座，摆在路两侧，把「战力差别」摆在画面里
+	var plan: Array = [
+		[&"r4", Vector2i(1, 0)], [&"r5", Vector2i(3, 2)], [&"o4", Vector2i(5, 2)],
+		[&"h5", Vector2i(5, 5)], [&"b4", Vector2i(1, 6)], [&"s4", Vector2i(3, 8)],
+		[&"g4", Vector2i(5, 11)], [&"r6", Vector2i(1, 12)],
+	]
+	for item: Array in plan:
+		var t: TDTower = content.make_tower(item[0])
+		spawner.place_tower_at_cell(t, item[1])
+		# td_core 的塔默认会自绘「灰方块 + 射程圈」用于调试，正式渲染由本文件接管
+		t.debug_draw = false
+	spawner.start_next_wave()
+	toast("演示布防：8 座塔 · 功勋已解锁到第 7 档")
 
 
 ## content.json 的 professions 是本项目扩展字段，TDContent 不认识，手动读一次。
@@ -356,29 +390,35 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2(-BOARD_ORIGIN.x, -BOARD_ORIGIN.y), SCREEN), BG)
+	# 内容解析失败时 spawner 会是 null，_draw 仍会被调用，先挡住。
+	if spawner == null or spawner.map == null:
+		return
 
-	# 地面
-	if _tex_grass != null:
-		for x: int in range(9):
-			for y: int in range(15):
-				var p := Vector2(x, y) * 64.0
-				draw_texture_rect(_tex_grass, Rect2(p, Vector2(64, 64)), false,
-					Color(1, 1, 1, 0.30))
-
-	# 路径
+	# 地面：Kenney 那两张草/土其实是纯色块，贴上去反而更平，所以直接按格子
+	# 铺底色 + 每格一点确定性微差，远看才有「草地不是一块油漆」的层次。
 	var map: TDMap = spawner.map
+	for x: int in range(9):
+		for y: int in range(15):
+			var v := 0.016 * float((x * 7 + y * 13) % 5)
+			draw_rect(Rect2(Vector2(x, y) * 64.0, Vector2(64, 64)),
+				Color(0.150 + v, 0.272 + v, 0.212 + v))
+
+	# 路径：冷灰石板，比草地亮一档，靠明度差把路「抬」出来
 	for c: Vector2i in map.path_cells():
 		if not map.in_bounds(c):
 			continue
 		var r := Rect2(Vector2(c) * 64.0, Vector2(64, 64))
-		draw_rect(r, PATH_COLOR)
-		draw_rect(r, PATH_EDGE, false, 1.0)
+		var pv := 0.014 * float((c.x * 11 + c.y * 5) % 4)
+		draw_rect(r, Color(0.208 + pv, 0.262 + pv, 0.325 + pv))
+		draw_rect(r, Color(0.34, 0.42, 0.52, 0.30), false, 1.0)
 
-	# 网格
+	# 网格：只做很淡的参考线，别抢地面的戏
 	for x: int in range(10):
-		draw_line(Vector2(x * 64, 0), Vector2(x * 64, BOARD_SIZE.y), GRID_COLOR, 1.0)
+		draw_line(Vector2(x * 64, 0), Vector2(x * 64, BOARD_SIZE.y),
+			Color(GRID_COLOR, 0.35), 1.0)
 	for y: int in range(16):
-		draw_line(Vector2(0, y * 64), Vector2(BOARD_SIZE.x, y * 64), GRID_COLOR, 1.0)
+		draw_line(Vector2(0, y * 64), Vector2(BOARD_SIZE.x, y * 64),
+			Color(GRID_COLOR, 0.35), 1.0)
 
 	_draw_hover()
 	_draw_towers()
@@ -411,10 +451,14 @@ func _draw_towers() -> void:
 		var col := Color(str(def.get("color", "#8899AA")))
 		var shape := str(def.get("shape", "square"))
 		var p: Vector2 = t.position
-		var s: float = 16.0 + 2.5 * float(t.level)
+		var s: float = 19.0 + 3.0 * float(t.level)
 		# 射程：只在选中时显示，避免屏幕被圆环淹没
 		if t == selected_tower:
 			draw_arc(p, t.range_px, 0, TAU, 64, Color(col, 0.45), 2.0)
+		# 石台 + 投影：让塔有厚度，不是贴在地上的一块色
+		draw_circle(p + Vector2(0, 4), s * 1.06, Color(0, 0, 0, 0.35))
+		draw_circle(p, s * 1.06, Color(0.16, 0.20, 0.25))
+		draw_arc(p, s * 1.06, 0, TAU, 32, Color(col, 0.45), 1.5)
 		match shape:
 			"circle":
 				draw_circle(p, s, col)
@@ -428,35 +472,40 @@ func _draw_towers() -> void:
 				draw_colored_polygon(_poly(p, s * 1.15, 10), col)
 			_:
 				draw_rect(Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), col)
-		# 等级角标
-		draw_circle(p + Vector2(s * 0.75, -s * 0.75), 6.0, Color("#0B1420"))
-		draw_circle(p + Vector2(s * 0.75, -s * 0.75), 4.0, col.lightened(0.35))
+		# 等级角标（只有升过级才显示，避免满屏小圆点）
+		if t.level > 1:
+			draw_circle(p + Vector2(s * 0.75, -s * 0.75), 8.0, Color("#0B1420"))
+			draw_circle(p + Vector2(s * 0.75, -s * 0.75), 6.0, col.lightened(0.35))
 
 
 func _draw_enemies() -> void:
 	for e: TDEnemy in spawner.enemies:
 		var p: Vector2 = e.position
 		var tex: Texture2D = _tex_enemy.get(str(e.id), null)
-		var col := Color("#E8EFF5")
+		# 贴图是 Kenney 的两张基色图，靠 modulate 拉开辨识度。
+		# 之前用的都是暗色，叠在暗绿草地上糊成一团，这里统一提亮。
+		var col := Color("#EEF6FF")          # soldier
 		if e.id == &"brute":
-			col = Color("#B58A5B")
+			col = Color("#F0A878")
 		elif e.id == &"flyer":
-			col = Color("#7FC7E8")
+			col = Color("#A8E0FF")
 		elif e.id == &"boss":
-			col = Color("#E04B7A")
+			col = Color("#FF8FA8")
 		elif e.id == &"scout":
-			col = Color("#C8B87F")
+			col = Color("#FFE98A")
 		if tex != null:
-			draw_texture_rect(tex, Rect2(p - Vector2(14, 14), Vector2(28, 28)), false, col)
+			# 影子先把单位从地面「抬」起来，否则 40px 的贴图会糊在 64px 的格子里
+			draw_circle(p + Vector2(0, 7), 15.0, Color(0, 0, 0, 0.30))
+			draw_texture_rect(tex, Rect2(p - Vector2(20, 20), Vector2(40, 40)), false, col)
 		else:
-			draw_circle(p, 12.0, col)
+			draw_circle(p, 16.0, col)
 		if e.flying:
-			draw_arc(p, 18.0, 0, TAU, 24, Color(col, 0.5), 1.5)
+			draw_arc(p, 24.0, 0, TAU, 24, Color(col, 0.5), 1.5)
 		# 血条
 		var ratio: float = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
-		var bar := Rect2(p + Vector2(-16, -24), Vector2(32, 4))
-		draw_rect(bar, Color(0, 0, 0, 0.55))
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 4)),
+		var bar := Rect2(p + Vector2(-22, -33), Vector2(44, 5))
+		draw_rect(bar, Color(0, 0, 0, 0.6))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, 5)),
 			Color("#E74C3C").lerp(Color("#2ECC71"), ratio))
 
 

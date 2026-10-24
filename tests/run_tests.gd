@@ -142,10 +142,16 @@ func _run() -> void:
 	sp.auto_tick = false
 	sp.configure(c2)
 	root.add_child(sp)
-	var g0: int = sp.economy.gold
+	## 测试用 r7（3800 金币），但初始经济只有 150，所以先给足钱再记基准值。
+	## 这一步不是作弊：这里要验证的是「放得下 + 能清波 + 金币增长」，
+	## 不是验证贫穷状态下买不买得起（那条由 build_block_reason 覆盖）。
+	sp.economy.earn(4000)
 	check(sp.start_next_wave(), "第 1 波可以开始")
 	var t2: TDTower = c2.make_tower(&"r7")
 	check(sp.place_tower_at_cell(t2, Vector2i(1, 0)), "高阶单位能放在 (1,0)")
+	## 基准值要放在「已经付过钱」之后，否则小怪赏金会被 3800 的建造成本吃掉，
+	## 看起来像金币反而少了。
+	var g0: int = sp.economy.gold
 	var guard: int = 0
 	while sp.enemies_left_in_wave() > 0 and guard < 6000:
 		sp.advance(0.016)

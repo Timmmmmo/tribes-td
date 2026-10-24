@@ -6,11 +6,17 @@
 
 ---
 
-## 在线试玩（Web 版，现在是主线）
+## 在线试玩（两个版本，都能直接玩）
 
-👉 **https://timmmmmo.github.io/tribes-td/**
+| 版本 | 链接 | 说明 |
+|---|---|---|
+| **引擎版（Godot 4.7.2 导出）** | **https://timmmmmo.github.io/tribes-td/godot/** | 真正的 Godot 构建，38MB wasm，首屏要等几秒。加 `?demo=1` 看满编布防。 |
+| 轻量版（canvas 2D） | https://timmmmmo.github.io/tribes-td/ | 纯 JS，88KB 单文件，秒开。美术比引擎版好，因为它能全程序化绘制。 |
 
-GitHub Pages，纯静态、无分享码、无鉴权、无 Cookie，转发多少手都不会坏。手机打开即可开打。
+两个版本共用同一份数值表 `data/content.json`，规则完全一致。选哪个看你想要什么：
+想要「工程上确实是引擎在做」就开第一个，想要「画面好看、打开快」就开第二个。
+
+GitHub Pages 托管，纯静态、无分享码、无鉴权、无 Cookie，转发多少手都不会坏。
 
 > **踩过的坑 1（已解决）**：早先托管在 WorkBuddy 托管网关时，网关要求「用 `?sharecode=` 换 Cookie 才放行」。
 > 分享码一旦被聊天工具截断，页面不是白屏，而是返回一张「链接不完整，地址缺少访问参数」的提示页——
@@ -19,19 +25,50 @@ GitHub Pages，纯静态、无分享码、无鉴权、无 Cookie，转发多少�
 > **踩过的坑 2**：`web/index.html` 是单文件产物（JS 与数值表全内联，整页 1 个请求），
 > 所以它既能在 GitHub Pages 上跑，也能直接双击本地文件跑，不依赖任何子资源。
 
-手机打开最好使，横屏也行，浏览器直接跑，不用装引擎。
+> **踩过的坑 3**：Godot 的 Web 导出里 `SystemFont` 查不到系统字体，中文全变豆腐块。
+> 现在打包一份 175KB 的 Noto Sans SC 子集（`tools/subset_font.py` 只留游戏用到的 707 个字）瑞底。
 
 工程上有两条腿：
 
 | 实现 | 位置 | 用途 |
 |---|---|---|
-| **Web 版（canvas 2D）** | `web/` | 真正能点开就玩的版本。画布 2D 全程序化绘制，零外部素材、零构建步骤。 |
-| Godot 版（typed GDScript） | `game/` `addons/` `scenes/` | 目标形态，数值与 Web 版同源（同一份 `content.json`）。 |
+| **Godot 版（typed GDScript）** | `game/` `addons/` `scenes/` | 主目标形态。已通过 128 项 headless 自测，可导出 Web。 |
+| Web 版（canvas 2D） | `web/src/` → `web/index.html` | 纯 JS 重写，零构建、秒开，美术反而更好。 |
 
 两版共用同一套数值表 `data/content.json`（生成脚本 `tools/gen_content.py` 会把它复制到 `web/`），
 所以调平衡只改一处，两边同时生效。
 
-### Web 版怎么跑
+### Godot 版怎么跑
+
+需要 **Godot 4.7.x**（编辑器，不是模板）。仓库里已经带好了导出预设 `export_presets.cfg`。
+
+```bash
+# 1) 导入资源（首次、或新增了素材后跑）
+godot --headless --path . --import
+
+# 2) headless 自测：期望 RESULT: PASS 128 checks, 0 failures
+godot --headless --path . -s res://tests/run_tests.gd
+
+# 3) 导出网页版（需要 export templates，或跑下面的抽模板脚本）
+godot --headless --path . --export-release "Web" build/web/index.html
+
+# 4) 本地验证（必须 http，不能 file://；wasm 需要正确的 MIME）
+python tools/serve_web.py build/web 8124
+```
+
+模板很大（官方 tpz 1.2GB），这里有个只抽 web 部分的脚本，实测只传 80MB 左右：
+
+```bash
+python tools/fetch_templates.py \
+  https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz \
+  "$APPDATA/Godot/export_templates/4.7.2.stable"
+```
+
+导出预设里 **`variant/thread_support=false`**，故意关掉多线程：这样不需要
+`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` 两个响应头，
+GitHub Pages 这类不能自定义头的静态托管直接能跑。代价是性能低一些。
+
+### Web 版（canvas）怎么跑
 
 `web/index.html` 是**打包产物**（单文件，把所有 JS 和数值表内联进去，整页只发 1 个请求）。
 源码在 `web/src/`：
