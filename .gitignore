@@ -14,3 +14,4 @@ build/
 # 字体源文件（8MB，只用来生成 game_cjk.ttf 子集，不进仓库）
 assets/fonts/src_*.otf
 assets/fonts/_chars.txt
+web/godot/*.import
