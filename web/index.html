@@ -1563,7 +1563,7 @@ function drawTopBar(ctx, now) {
   if (!G.active && !G.gameOver && G.waveIndex + 1 < G.waves.length) {
     const left = Math.max(0, WAVE_GAP - G.waveGapTimer);
     const a = 0.35 + 0.25 * Math.sin(now * 6);
-    txt(ctx, `下一波 ${left.toFixed(1)}s`, cx + cw / 2, cy + ch + 17, 11.5, `rgba(140,200,230,${a})`, 'center', 600);
+    txt(ctx, `下一波 ${left.toFixed(1)}s`, 620, 86, 11, `rgba(140,200,230,${a})`, 'center', 600);
   }
   ctx.restore();
 }

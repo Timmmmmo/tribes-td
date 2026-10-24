@@ -8,7 +8,17 @@
 
 ## 在线试玩（Web 版，现在是主线）
 
-👉 **https://tribes-td.app.workbuddy.host/?sharecode=U7H7AJWP6F**
+👉 **https://3000-17655b5a1cde4e6689bac2baca8e8aa6.e2b.sh2.sandbox.cloudstudio.club/**
+
+这条链接**不带 `?sharecode=`**，也不需要任何 Cookie，直接打开就玩。
+
+另一条同域名的（带分享码，转发时容易被聊天工具吃掉后面那截）：
+
+👉 `https://tribes-td.app.workbuddy.host/?sharecode=U7H7AJWP6F`
+
+> **踩过的坑**：托管网关要求「用 `?sharecode=` 换 Cookie 才放行」。分享码一旦丢了，页面不是白屏，
+> 而是返回一张「链接不完整，地址缺少访问参数」的提示页——看到那张图就说明是分享码被截断了，
+> 不是游戏坏了。所以对外只发第一条直连。
 
 手机打开最好使，横屏也行，浏览器直接跑，不用装引擎。
 
@@ -42,7 +52,13 @@ iOS 严格隐私模式都会），子请求就 403，直接白屏。内联之后
 
 ### 想改成自己的 GitHub Pages
 
-仓库里已经放好了 `.github/workflows/pages.yml`，推上去就能用：
+仓库里已经放好了 `.github/workflows/pages.yml`，推上去就能用。一条命令：
+
+```bash
+bash tools/push_github.sh <你的账号>/tribes-td
+```
+
+脚本会重新打包、建好 remote、提交并推送。手动也行：
 
 ```bash
 git init -b main && git add . && git commit -m "Tribes TD"
@@ -52,6 +68,9 @@ git push -u origin main
 
 然后到仓库 **Settings → Pages → Source** 选 **GitHub Actions**。
 下一次 push 会自动把 `web/` 发到 `https://<你的账号>.github.io/tribes-td/`。
+
+GitHub Pages 这条路的好处：**没有分享码、没有鉴权、没有 Cookie**，
+链接永远是裸的 `https://xxx.github.io/tribes-td/`，转多少手都不会坏。
 
 ---
 
