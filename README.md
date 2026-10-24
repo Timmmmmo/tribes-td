@@ -8,17 +8,16 @@
 
 ## 在线试玩（Web 版，现在是主线）
 
-👉 **https://3000-17655b5a1cde4e6689bac2baca8e8aa6.e2b.sh2.sandbox.cloudstudio.club/**
+👉 **https://timmmmmo.github.io/tribes-td/**
 
-这条链接**不带 `?sharecode=`**，也不需要任何 Cookie，直接打开就玩。
+GitHub Pages，纯静态、无分享码、无鉴权、无 Cookie，转发多少手都不会坏。手机打开即可开打。
 
-另一条同域名的（带分享码，转发时容易被聊天工具吃掉后面那截）：
+> **踩过的坑 1（已解决）**：早先托管在 WorkBuddy 托管网关时，网关要求「用 `?sharecode=` 换 Cookie 才放行」。
+> 分享码一旦被聊天工具截断，页面不是白屏，而是返回一张「链接不完整，地址缺少访问参数」的提示页——
+> 看到那张图就是分享码丢了。搬到 GitHub Pages 后这个坑彻底没有了。
 
-👉 `https://tribes-td.app.workbuddy.host/?sharecode=U7H7AJWP6F`
-
-> **踩过的坑**：托管网关要求「用 `?sharecode=` 换 Cookie 才放行」。分享码一旦丢了，页面不是白屏，
-> 而是返回一张「链接不完整，地址缺少访问参数」的提示页——看到那张图就说明是分享码被截断了，
-> 不是游戏坏了。所以对外只发第一条直连。
+> **踩过的坑 2**：`web/index.html` 是单文件产物（JS 与数值表全内联，整页 1 个请求），
+> 所以它既能在 GitHub Pages 上跑，也能直接双击本地文件跑，不依赖任何子资源。
 
 手机打开最好使，横屏也行，浏览器直接跑，不用装引擎。
 
