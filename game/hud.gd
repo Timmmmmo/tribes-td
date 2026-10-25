@@ -24,6 +24,10 @@ const WAVE_BTN := Rect2(20, 1018, 218, 72)
 const INTEL_BOX := Rect2(248, 1018, 244, 72)
 const HERO_BOX := Rect2(502, 1018, 198, 72)
 
+## 结算页。宽高留够，是因为这里要放下「你死于什么」+ 构成 + 一句建议，
+## 挤成三行小字等于没写 —— 玩家不会读，只会点掉。
+const RESULT_PANEL := Rect2(40, 210, 640, 740)
+
 const BG := Color("#0B1420")
 const PANEL := Color("#16232F")
 const PANEL_HI := Color("#20323F")
@@ -87,6 +91,9 @@ func font() -> Font:
 
 func _draw() -> void:
 	if main == null or main.merit == null:
+		return
+	if main.run_over:
+		_draw_result()
 		return
 	_draw_top()
 	_draw_actions()
@@ -525,3 +532,138 @@ func _hit_skills(p: Vector2) -> bool:
 		main.use_skill(main.merit.SKILLS[i]["id"])
 		return true
 	return false
+
+
+# ------------------------------------------------------------------ 结算页
+#
+# 这一页只回答一个问题：我是怎么输的。
+# 所以版面的权重是「主因 → 构成 → 建议」，而不是把一堆数字平铺上去。
+# 数据全部来自 RunReport，这里不做任何判断，只排版。
+
+func _draw_result() -> void:
+	var rep: RunReport = main.report
+	if rep == null:
+		return
+	var v: Dictionary = rep.verdict()
+	var won: bool = bool(v["won"])
+	var accent: Color = Color("#E8C36A") if won else BAD
+
+	# 全屏压暗。用一层带蓝的深色而不是纯黑：纯黑会让棋盘看起来「关机了」，
+	# 玩家会以为自己把游戏点崩了。
+	draw_rect(Rect2(0, 0, W, H), Color(0.02, 0.04, 0.06, 0.84))
+
+	var x: float = RESULT_PANEL.position.x + 30.0
+	var iw: float = RESULT_PANEL.size.x - 60.0
+	var blame_txt: String = str(v["blame"])
+	var rows: Array = v["breakdown"]
+	var advice_lines: Array[String] = _wrap(str(v["advice"]), 16, iw - 32.0)
+	var foot1: String = str((v["lines"] as Array)[1])
+	var foot2: String = str((v["lines"] as Array)[2])
+
+	# 先量后画。面板高度跟着内容走 —— 固定高度在「一只没漏」和「建议很长」
+	# 这两种极端下都会留一大片空白或者直接溢出，而这两件事都会发生。
+	var body: float = 34.0 + 54.0 + 26.0 + 26.0 + 22.0  # 上边距·标题·副标题·时长·分割线
+	body += 60.0 if not blame_txt.is_empty() else 36.0
+	if not rows.is_empty():
+		body += 22.0 + float(rows.size()) * 34.0 + 10.0
+	body += 18.0 + 22.0 + float(advice_lines.size()) * 26.0 + 14.0
+	## 底部那块：两条数据 + 重开提示 + 内边距。
+	## 这三个数必须比实际行距宽松一点 —— 紧贴建议框会让整页看起来「糊在一起」，
+	## 而结算页最怕的就是玩家一眼扫过去什么都没记住。
+	body += 40.0 + 26.0 + 40.0
+
+	# 垂直位置按内容高度换算，视觉重心落在棋盘中部而不是屏幕正中 ——
+	# 正中会贴着底部卡片，看起来像被 HUD 挤上去的。
+	var r := Rect2(RESULT_PANEL.position.x,
+		clampf(150.0 + (940.0 - body) * 0.45, 160.0, 420.0),
+		RESULT_PANEL.size.x, body)
+	_panel(r, 18.0, Color("#1A2A38"), Color("#0E1A24"), Color("#33506A"))
+	# 顶部强调条 + 一条同色辉光，让「赢 / 输」在两米外就能分辨
+	draw_rect(Rect2(r.position, Vector2(r.size.x, 5.0)), accent)
+	TDArt.fill_vgrad(self, TDArt.round_rect(
+		Rect2(r.position, Vector2(r.size.x, 26.0)), 13.0, 3), accent, Color(0, 0, 0, 0),
+		r.position.y, r.position.y + 26.0)
+
+	var y: float = r.position.y + 34.0
+	text(Vector2(x, y), str(v["title"]), 38, accent if won else Color("#FF8C8C"))
+	y += 54.0
+	text(Vector2(x, y), str(v["headline"]), 17, DIM)
+	y += 26.0
+	text(Vector2(x, y), "本局用时 %s" % RunReport.clock(rep.duration), 15, DIM)
+	y += 26.0
+	draw_line(Vector2(x, y), Vector2(x + iw, y), LINE, 1.0)
+	y += 22.0
+
+	# 主因：整页最重要的一行，字号给到最大。
+	if not blame_txt.is_empty():
+		text(Vector2(x, y), "主要漏怪", 14, DIM)
+		y += 24.0
+		text(Vector2(x, y), blame_txt, 19, Color("#FFB4B4"))
+		y += 40.0
+	else:
+		text(Vector2(x, y), "一只都没漏出去", 19, Color("#8CE0B0"))
+		y += 40.0
+
+	# 构成：按掉血量排序，配一条相对长度的条。
+	# 按掉血量而不是只数排，是因为重装一只掉 2 血、斥候一只掉 1 血 ——
+	# 按只数排会把真正致命的那类藏到第二行。
+	if not rows.is_empty():
+		text(Vector2(x, y), "漏怪构成", 14, DIM)
+		y += 22.0
+		var worst: int = 1
+		for row: Dictionary in rows:
+			worst = maxi(worst, int(row["damage"]))
+		for row: Dictionary in rows:
+			text(Vector2(x, y), str(row["name"]), 16, TEXT)
+			text_r(x + iw, y, "×%d　-%d 血" % [int(row["count"]), int(row["damage"])],
+				15, DIM)
+			draw_rect(Rect2(x, y + 21.0, iw, 4.0), Color(0, 0, 0, 0.45))
+			draw_rect(Rect2(x, y + 21.0, iw * float(row["damage"]) / float(worst), 4.0),
+				Color(0.88, 0.34, 0.38, 0.85))
+			y += 34.0
+		y += 10.0
+
+	# 建议：写在独立的浅色盒子里。和上面的数字分开，是为了让它被读到 ——
+	# 这一句是整页唯一「下次能改」的东西。
+	y += 18.0
+	var box_h: float = 22.0 + float(advice_lines.size()) * 26.0 + 14.0
+	_panel(Rect2(x, y, iw, box_h), 10.0, Color("#20323F"), Color("#16232F"), Color("#2F4A5E"))
+	draw_rect(Rect2(x, y, 3.0, box_h), TEAL)
+	var ty: float = y + 16.0
+	for ln: String in advice_lines:
+		text(Vector2(x + 18.0, ty), ln, 16, Color("#CFE3EE"))
+		ty += 26.0
+
+	# 底部：一行数据 + 一行重开提示
+	var by2: float = r.position.y + r.size.y - 30.0
+	text(Vector2(x, by2 - 46.0), foot1, 14, DIM)
+	text(Vector2(x, by2 - 26.0), foot2, 14, DIM)
+	# 提示文字只在 0.55~1.0 之间呼吸。用 sin 直接当 alpha 会掉到 0 附近，
+	# 截屏或恰好抬头的那一瞬就是一片看不见 —— 玩家会以为卡住了。
+	var blink: float = 0.55 + 0.45 * (0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.006))
+	text_c(W * 0.5, by2 + 4.0, "点击任意处再来一局", 17,
+		Color(TEXT.r, TEXT.g, TEXT.b, blink))
+
+
+## 逐字折行。中文没有空格，按字符宽度切就够；
+## 顺手把句号/逗号/问号这类不能出现在行首的标点往回拉一格。
+func _wrap(s: String, size: int, max_w: float) -> Array[String]:
+	const NO_LINE_START := "，。！？、；：）】」』…"
+	var out: Array[String] = []
+	var line: String = ""
+	for i: int in s.length():
+		var ch: String = s[i]
+		var trial: String = line + ch
+		if _font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > max_w \
+				and not line.is_empty():
+			if NO_LINE_START.contains(ch) and line.length() > 1:
+				out.append(line.substr(0, line.length() - 1))
+				line = line[line.length() - 1] + ch
+			else:
+				out.append(line)
+				line = ch
+		else:
+			line = trial
+	if not line.is_empty():
+		out.append(line)
+	return out

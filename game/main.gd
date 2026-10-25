@@ -42,6 +42,8 @@ var merit: MeritSystem
 var hud: Node
 var status: StatusSystem
 var hero: HeroUnit
+var boss_phases: BossPhases
+var report: RunReport
 
 var professions: Array = []
 var profession_index: int = 0
@@ -55,6 +57,18 @@ var status_time: float = 0.0
 ## 准备阶段：_awaiting_wave 为真时 prep_left 在倒数，数到 0 自动开波。
 var prep_left: float = 0.0
 var _awaiting_wave: bool = false
+
+## 结算。run_over 为真时整个玩法循环停摆，只留结算页和「再来一局」。
+## over_time 是结算后经过的秒数，用来挡掉「结束瞬间那一下点击」——
+## 玩家最后一击常常是连点，不挡就会直接跳过归因页。
+var run_over: bool = false
+var over_time: float = 0.0
+const OVER_INPUT_GUARD := 0.7
+## 上一帧看到的总金币，用来把「收入」和「结余」分开统计。
+var _gold_seen: int = 0
+var _boss_demo_done: bool = false
+## BOSS 阶段横幅。同一时刻只留一条，后到的覆盖先到的。
+var _banner: Dictionary = {}
 
 ## 掉落物：[{pos, kind, level, t}]
 var _items: Array[Dictionary] = []
@@ -110,12 +124,31 @@ func restart() -> void:
 	_rings.clear()
 	_beams.clear()
 	_flash.clear()
+	_banner.clear()
 	_shake = 0.0
 
 	# 英雄与状态机是这一轮新增的两套系统，必须跟 spawner 一起重建
 	status = StatusSystem.new()
 	status.setup(spawner, content)
 	status.split_requested.connect(_on_split_requested)
+	# BOSS 阶段转换。召唤走和分裂同一个处理函数 —— 都是「在某个位置吐出一批怪」，
+	# 分成两份实现一定会漏掉其中一份的 leak_damage / 信号连接。
+	boss_phases = BossPhases.new()
+	boss_phases.setup(spawner, content)
+	boss_phases.summon_requested.connect(_on_split_requested)
+	boss_phases.phase_changed.connect(_on_boss_phase)
+
+	report = RunReport.new()
+	report.setup(content)
+	report.total_waves = spawner.waves.size()
+	report.max_lives = spawner.economy.max_lives
+	# 总收入靠 gold_changed 的增量累加，而不是在每个 earn() 的调用点各记一笔。
+	# 后者今天有四处（赏金/波次奖励/提前开波/卖塔），明天加了第五处就会漏。
+	_gold_seen = spawner.economy.gold
+	spawner.economy.gold_changed.connect(_on_gold_changed)
+	run_over = false
+	over_time = 0.0
+
 	var hero_start: Vector2 = spawner.map.cell_center(Vector2i(1, 3))
 	hero = HeroUnit.new()
 	hero.reset(hero_start)
@@ -129,18 +162,32 @@ func restart() -> void:
 	_ensure_hud()
 	if _demo_requested():
 		_apply_demo()
+	if _flag("--report-demo") or _query_has("report"):
+		_apply_report_demo()
+	if _flag("--boss-demo"):
+		_apply_boss_demo()
+
+
+## 统一的调试开关判定。命令行传 `--xxx`，网页传 `?xxx=1`。
+##
+## 两个 args 接口都要查：`godot --demo` 进 get_cmdline_args()，
+## `godot -- --demo` 进 get_cmdline_user_args()。少查一个，开关就会「明明传了却不生效」，
+## 而且失败是静默的 —— 画面照常出，只是没有演示数据。
+func _flag(name: String) -> bool:
+	return name in OS.get_cmdline_args() or name in OS.get_cmdline_user_args()
+
+
+func _query_has(key: String) -> bool:
+	if not OS.has_feature("web"):
+		return false
+	var q: Variant = JavaScriptBridge.eval("location.search", true)
+	return q is String and (q as String).contains(key)
 
 
 ## 演示模式：命令行加 `--demo`，或网页加 `?demo=1`。
 ## 自动布防 + 给足资源，用来截图、录片、给评审一眼看终局，不影响正常开局。
 func _demo_requested() -> bool:
-	if "--demo" in OS.get_cmdline_args():
-		return true
-	if OS.has_feature("web"):
-		var q: Variant = JavaScriptBridge.eval("location.search", true)
-		if q is String and (q as String).contains("demo"):
-			return true
-	return false
+	return _flag("--demo") or _query_has("demo")
 
 
 func _apply_demo() -> void:
@@ -159,8 +206,46 @@ func _apply_demo() -> void:
 		spawner.place_tower_at_cell(t, item[1])
 		# td_core 的塔默认会自绘「灰方块 + 射程圈」用于调试，正式渲染由本文件接管
 		t.debug_draw = false
-	spawner.start_next_wave()
+	# BOSS 演示要自己挑波次，所以不能让演示布防顺手把第 1 波开出去 ——
+	# start_next_wave() 一旦把 _active 置真，后面再改 wave_index 也开不了新波。
+	if not _flag("--boss-demo"):
+		spawner.start_next_wave()
 	toast("演示布防：8 座塔 · 功勋已解锁到第 7 档")
+
+
+## 结算页的演示数据。写在代码里而不是走真打一局：
+## 归因页的排版需要反复调，每次调都重打一局 12 波是不可能工作的。
+## 这组数字是照着一次真实败局抄的（第 12 波，重装漏 4 只）。
+func _apply_report_demo() -> void:
+	report.waves_cleared = 11
+	report.kills = {&"soldier": 96, &"scout": 34, &"brute": 18, &"flyer": 21}
+	report.leaks = {&"brute": 4, &"scout": 6, &"flyer": 3}
+	report.leak_damage = {&"brute": 8, &"scout": 6, &"flyer": 3}
+	report.gold_earned = 1480
+	report.towers_built = 9
+	report.hero_level = 5
+	report.duration = 384.0
+	# _finish 会从 economy 抓最终生命，所以这里得把生命也置 0，
+	# 否则演示页会出现「基地失守 · 生命 16/16」这种自相矛盾的标题。
+	spawner.economy.lives = 0
+	if _flag("--win"):
+		report.won = true
+		spawner.economy.lives = 7
+		report.waves_cleared = spawner.waves.size()
+		report.leaks = {&"scout": 2}
+		report.leak_damage = {&"scout": 2}
+	_finish("基地失守")
+
+
+## BOSS 演示：直接跳到最后一波，并在 BOSS 出场的那一帧把它打到 38% 血。
+## 存在的唯一理由是「阶段转换」的视觉没法靠等 —— 正常打到第 15 波要十几分钟，
+## 而调一个血条刻度、一圈光环改十几遍。
+func _apply_boss_demo() -> void:
+	spawner.economy.earn(9000)
+	merit.add(1200)
+	spawner.wave_index = spawner.waves.size() - 2
+	spawner.start_next_wave()
+	toast("BOSS 演示：直接进最后一波")
 
 
 ## content.json 的 professions 是本项目扩展字段，TDContent 不认识，手动读一次。
@@ -203,23 +288,41 @@ func _process(delta: float) -> void:
 		return
 	# 排查用：加 --trace-enemies 会每 2 秒打印场上所有敌人的坐标，
 	# 用来核对「地图画出来的路」和「敌人实际走的路」是否一致。
-	if OS.get_cmdline_args().has("--trace-enemies") and Engine.get_process_frames() % 120 == 0:
+	if _flag("--trace-enemies") and Engine.get_process_frames() % 120 == 0:
 		var parts: Array[String] = []
 		for e1: TDEnemy in spawner.enemies:
 			parts.append("%s@%s" % [str(e1.id), str(e1.position.round())])
 		print("[trace] f=%d wave=%d onfield=%d %s" % [
 			Engine.get_process_frames(), spawner.wave_index,
 			spawner.enemies.size(), " ".join(parts).left(300)])
+	# 结算之后只保留视觉衰减：光束、粒子、飘字要自然消失，
+	# 不能让它们在半空中冻住 —— 那一秒的画面会成为玩家记住的最后一帧。
+	if run_over:
+		over_time += delta
+		_tick_effects(delta)
+		queue_redraw()
+		return
+
 	merit.sync_kills(spawner.towers, content, spawner.economy)
+	report.duration += delta
+	report.lives_left = spawner.economy.lives
+	report.hero_level = hero.level if hero != null else 1
 	status_time = maxf(0.0, status_time - delta)
 	_tick_effects(delta)
 	status.tick(delta)
+	boss_phases.tick(delta)
 	_tick_hero(delta)
 	_tick_items(delta)
 	_tick_waves(delta)
+	# BOSS 演示：BOSS 一露面就打到 38%，跨两档进入狂暴，用来核对视觉
+	if _flag("--boss-demo") and not _boss_demo_done:
+		for e: TDEnemy in spawner.enemies:
+			if e.id == &"boss":
+				e.hp = e.max_hp * 0.38
+				_boss_demo_done = true
 	# 验证用：加 `--autoplay` 会在每次准备阶段立刻开波，
 	# 相当于一个「很急的玩家」，用来在录屏里跑到中后段看机制。正常游戏不会传这个参数。
-	if OS.get_cmdline_args().has("--autoplay") and _awaiting_wave:
+	if _flag("--autoplay") and _awaiting_wave:
 		start_wave_early()
 	queue_redraw()
 
@@ -342,7 +445,7 @@ func _on_split_requested(into: StringName, hp: float, speed: float, bounty: int,
 		e.id = into
 		e.setup(path, hp, speed, bounty)
 		# 两只稍微错开，否则完全重叠看起来像一只没死
-		e.position += Vector2(randf_range(-9.0, 9.0), randf_range(-9.0, 9.0))
+		e.position += Vector2(randf_range(-14.0, 14.0), randf_range(-14.0, 14.0))
 		# 这两个是 spawner 的私有回调，但走的是它自己的赏金/移除逻辑。
 		# 在这里重写一遍等于复制内核代码，反而更容易和上游跑偏。
 		e.killed.connect(spawner._on_killed)
@@ -381,6 +484,11 @@ func _tick_effects(delta: float) -> void:
 		if float(r["t"]) < float(r["life"]):
 			alive.append(r)
 	_rings = alive
+
+	if not _banner.is_empty():
+		_banner["t"] = float(_banner["t"]) + delta
+		if float(_banner["t"]) >= float(_banner["life"]):
+			_banner.clear()
 
 	alive = []
 	for b: Dictionary in _beams:
@@ -564,6 +672,14 @@ func _on_tower_placed(t: TDTower) -> void:
 	# td_core 的塔默认会自绘「灰方块 + 射程圈」用于调试，正式渲染由本文件接管
 	t.debug_draw = false
 	t.fired.connect(_on_tower_fired.bind(t))
+	report.towers_built += 1
+
+
+func _on_gold_changed(gold: int) -> void:
+	# 只把「变多」的部分算收入。花钱、卖塔退款都不影响这一局的累计收入口径。
+	if gold > _gold_seen:
+		report.gold_earned += gold - _gold_seen
+	_gold_seen = gold
 
 
 func _on_tower_fired(target: TDEnemy, shooter: TDTower) -> void:
@@ -594,29 +710,132 @@ func _on_enemy_killed(e: TDEnemy) -> void:
 	# 赏金是这只怪给的，飘字挂在怪身上，玩家才能把「击杀 → 金币」连起来
 	_float_text(e.position + Vector2(0, -6), "+%d" % e.bounty, Color("#F2C14E"), 15)
 	_maybe_drop_item(e.position)
+	report.record_kill(e)
 	status.try_split(e)
 
 
-func _on_enemy_leaked(_e: TDEnemy) -> void:
+func _on_enemy_leaked(e: TDEnemy) -> void:
 	_shake = 1.0
+	report.record_leak(e)
+	# 漏怪是玩家唯一能感知到的「我哪里做错了」的瞬间。把类型喊出来，
+	# 结算页才能对得上号 —— 否则最后一屏会突然出现一堆没见过的名字。
+	var name: String = report.enemy_name(e.id)
+	_float_text(e.position + Vector2(0, -10), "漏！%s -%d" % [name, e.leak_damage],
+		Color("#FF7A8A"), 15)
 
 
 func _on_wave_cleared(i: int) -> void:
+	report.waves_cleared = i + 1
 	toast("第 %d 波清空" % (i + 1))
 
 
+func _on_boss_phase(phase: int, title: String, detail: String) -> void:
+	toast("%s —— %s" % [title, detail])
+	_shake = 0.9
+	# 横幅用「覆盖式」而不是飘字：一次输出打掉 30% 血会同时跨两档，
+	# 两条飘字叠在同一个位置会变成一坨读不出来的红字。
+	# 后到的覆盖先到的，玩家看到的是当前状态，不是历史记录。
+	_banner = {"title": title, "detail": detail, "t": 0.0, "life": 2.4}
+	_rings.append({"pos": _boss_position(), "r0": 20.0, "r1": 240.0,
+		"color": Color(1.0, 0.32, 0.42, 1.0), "life": 0.6, "t": 0.0})
+
+
+## BOSS 的位置。找不到就用棋盘中部兜底 —— 环形特效落在 (0,0) 会像是渲染错位。
+func _boss_position() -> Vector2:
+	for e: TDEnemy in spawner.enemies:
+		if e.id == &"boss":
+			return e.position
+	return Vector2(BOARD_SIZE.x * 0.5, BOARD_SIZE.y * 0.42)
+
+
+## 阶段横幅：横贯棋盘的一条暗带 + 两行字。
+## 放在棋盘中央而不是 BOSS 头顶，是因为 BOSS 常常待在出生角落，
+## 那里贴着屏幕边缘，任何文字都会被裁掉一半。
+func _draw_banner() -> void:
+	if _banner.is_empty():
+		return
+	var t: float = float(_banner["t"])
+	var life: float = float(_banner["life"])
+	# 0.2s 淡入、最后 0.5s 淡出，中间全亮
+	var k: float = clampf(t / 0.20, 0.0, 1.0) * clampf((life - t) / 0.50, 0.0, 1.0)
+	if k <= 0.01:
+		return
+	var cy: float = BOARD_SIZE.y * 0.34
+	var band := Rect2(0, cy - 44.0, BOARD_SIZE.x, 92.0)
+	draw_rect(band, Color(0.02, 0.05, 0.07, 0.78 * k))
+	draw_line(Vector2(0, band.position.y), Vector2(BOARD_SIZE.x, band.position.y),
+		Color(1.0, 0.35, 0.44, 0.55 * k), 1.5)
+	draw_line(Vector2(0, band.end.y), Vector2(BOARD_SIZE.x, band.end.y),
+		Color(1.0, 0.35, 0.44, 0.55 * k), 1.5)
+	var f: Font = _font()
+	if f == null:
+		return
+	var cx: float = BOARD_SIZE.x * 0.5
+	var title: String = str(_banner["title"])
+	var detail: String = str(_banner["detail"])
+	var tw: float = f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+	draw_string(f, Vector2(cx - tw * 0.5, cy + 2.0), title,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.72, 0.78, k))
+	var dw: float = f.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	draw_string(f, Vector2(cx - dw * 0.5, cy + 30.0), detail,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1.0, 0.85, 0.88, 0.9 * k))
+
+
+
 func _on_victory() -> void:
-	toast("守住 15 波，通关")
+	report.won = true
+	_finish("守住最后一波，通关")
 
 
 func _on_defeat() -> void:
-	toast("基地失守")
+	_finish("基地失守")
+
+
+## 收尾：冻结玩法、抓一份最终数据、弹结算页。
+## 这里必须把 spawner.paused 打开 —— 结算页显示期间敌人还在走的话，
+## 玩家会看到「已经输了但怪还在往基地走」，比不显示归因更让人困惑。
+func _finish(msg: String) -> void:
+	if run_over:
+		return
+	run_over = true
+	over_time = 0.0
+	if spawner != null:
+		spawner.paused = true
+	report.lives_left = spawner.economy.lives
+	report.hero_level = hero.level if hero != null else 1
+	toast(msg)
+
+
+## 结算页点头部以外的地方重开。返回值只用于告诉 HUD「这一下我吃了」。
+func restart_after_report() -> bool:
+	if not run_over or over_time < OVER_INPUT_GUARD:
+		return false
+	restart()
+	return true
 
 
 # ------------------------------------------------------------------ 输入
 
+## 只取「按下」这一种事件，其他地方（英雄拖动、悬停）都不碰。
+func _press_point(event: InputEvent) -> Variant:
+	var touch: InputEventScreenTouch = event as InputEventScreenTouch
+	if touch != null and touch.pressed:
+		return touch.position
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		return mb.position
+	return null
+
+
 func _input(event: InputEvent) -> void:
 	if spawner == null:
+		return
+	# 结算页：整屏吞输入，点任意处重开。不走 hud.handle_input ——
+	# 否则玩家会隔着结算页点到下面的塔卡片，出现「重开前偷偷改了 build」。
+	if run_over:
+		var press: Variant = _press_point(event)
+		if press != null:
+			restart_after_report()
 		return
 	# 英雄拖动优先级最高：它的落点在棋盘里，不可能是 UI
 	if _handle_hero_drag(event):
@@ -763,6 +982,7 @@ func _draw() -> void:
 	_draw_beams()
 	_draw_particles()
 	_draw_floaters()
+	_draw_banner()
 	_draw_selection()
 
 	draw_set_transform(Vector2.ZERO)
@@ -1051,6 +1271,13 @@ func _draw_enemy(e: TDEnemy) -> void:
 		var pulse: float = 0.5 + 0.5 * sin(_time * 3.4)
 		draw_arc(p, base_r * (1.35 + pulse * 0.15), 0, TAU, 32,
 			Color(0.88, 0.29, 0.48, 0.35 + pulse * 0.30), 2.0, true)
+		# 狂暴之后换一圈更亮更快的红环。玩家必须能用余光看出「它变快了」，
+		# 否则速度这个唯一的反馈只能靠「它怎么突然走近了」后知后觉。
+		if boss_phases != null and boss_phases.is_enraged(e):
+			var fast: float = 0.5 + 0.5 * sin(_time * 11.0)
+			draw_arc(p, base_r * (1.75 + fast * 0.22), 0, TAU, 36,
+				Color(1.0, 0.22, 0.32, 0.55 + fast * 0.40), 3.0, true)
+			TDArt.glow(self, p, base_r * 3.4, Color(1.0, 0.30, 0.36, 0.16))
 
 	# 血条：圆角 + 按比例换色，比一条纯色条更能读出「还剩多少」
 	var ratio: float = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
@@ -1067,6 +1294,17 @@ func _draw_enemy(e: TDEnemy) -> void:
 			hc = Color("#FFD166")
 		TDArt.fill(self, TDArt.round_rect(
 			Rect2(bar.position, Vector2(maxf(bw * ratio, bh), bh)), bh * 0.5), hc)
+
+	# BOSS 血条上的阶段刻度。设计上的意义在于「可预期」：
+	# 玩家能看到再打多少血它会召唤/狂暴，就能提前留技能、提前补塔，
+	# 而不是被突然出现的三只怪打乱。没有刻度的阶段转换只是惊吓。
+	if boss and boss_phases != null:
+		for t: float in BossPhases.THRESHOLDS:
+			var x: float = bar.position.x + bw * t
+			draw_line(Vector2(x, bar.position.y - 1.0),
+				Vector2(x, bar.position.y + bh + 1.0), Color(0, 0, 0, 0.75), 2.6)
+			draw_line(Vector2(x, bar.position.y - 1.0),
+				Vector2(x, bar.position.y + bh + 1.0), Color(1, 0.85, 0.45, 0.55), 1.2)
 
 
 ## 掉落物：脉冲的菱形。用颜色区分槽位（剑/护符/靴），玩家不用读字就知道该捡什么。

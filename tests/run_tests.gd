@@ -304,6 +304,144 @@ func _run() -> void:
 	check(sph.economy.gold > gold0, "英雄击杀给金币（%d -> %d）" % [gold0, sph.economy.gold])
 	check(ms.merit == 0, "英雄击杀不给功勋，实际 %d" % ms.merit)
 
+	section("boss_phases")
+	## BOSS 的两档转换必须按血量跨、不能跳、不能重复触发。
+	var bsph: TDWaveSpawner = TDWaveSpawner.new()
+	bsph.auto_tick = false
+	bsph.configure(content)
+	root.add_child(bsph)
+	var bp: BossPhases = BossPhases.new()
+	bp.setup(bsph, content)
+	var phases: Array[int] = []
+	var summons: Array = []
+	var on_phase := func(p: int, _t: String, _d: String) -> void: phases.append(p)
+	var on_summon := func(into: StringName, a_hp: float, a_sp: float, a_b: int,
+			path: PackedVector2Array, count: int) -> void:
+		summons.append({"into": into, "hp": a_hp, "path": path, "count": count})
+	bp.phase_changed.connect(on_phase)
+	bp.summon_requested.connect(on_summon)
+
+	var big: TDEnemy = TDEnemy.new()
+	big.id = &"boss"
+	big.setup(PATH, 1000.0, 30.0, 130)
+	bsph.add_child(big)
+	bsph.enemies.append(big)
+
+	check(bp.phase_of(big) == 1, "出场是第一阶段")
+	bp.tick(0.016)
+	check(phases.is_empty(), "满血不触发任何转换")
+
+	big.hp = 690.0  # 69%
+	bp.tick(0.016)
+	check(phases.size() == 1 and phases[0] == 2, "掉到 70% 以下进入第二阶段")
+	check(summons.size() == 1, "第二阶段要求召唤援军")
+	if summons.size() == 1:
+		check(int(summons[0]["count"]) == 3, "召 3 只，实际 %d" % int(summons[0]["count"]))
+		var spath: PackedVector2Array = summons[0]["path"]
+		## 和分裂同一个坑：路径必须从当前位置起，否则援军会被传回出生点
+		check(spath.size() >= 2, "召唤路径至少两个点")
+		check(spath[0].distance_to(big.position) < 1.0, "召唤路径从 BOSS 当前位置开始")
+
+	bp.tick(0.016)
+	check(phases.size() == 1, "同一阶段不重复触发")
+
+	var speed_before: float = big.speed
+	big.hp = 350.0  # 35%
+	bp.tick(0.016)
+	check(phases.size() == 2 and phases[1] == 3, "掉到 40% 以下进入第三阶段")
+	check(bp.is_enraged(big), "第三阶段进入狂暴")
+	check(big.speed > speed_before * 1.4, "狂暴后移速明显变快 (%.1f -> %.1f)" % [
+		speed_before, big.speed])
+
+	## 眩晕期间 speed 被压成 0。如果只在这一帧乘一次，乘 0 还是 0 —— BOSS 会永远站着。
+	## 所以狂暴必须每帧对账，而不是「进入阶段的那一刻改一次」。
+	big.speed = 0.0
+	bp.tick(0.016)
+	check(big.speed == 0.0, "眩晕中不去抢 speed")
+	big.speed = speed_before
+	bp.tick(0.016)
+	check(absf(big.speed - speed_before * BossPhases.ENRAGE_SPEED) < 0.1,
+		"眩晕结束后狂暴重新生效，实际 %.1f" % big.speed)
+
+	## 一次性打掉 40% 会同时跨两档，必须两档都记到，不能只触发最后一档。
+	## 用一个新的 spawner：同一个 spawner 里还有上面那只 BOSS，
+	## 新实例的 BossPhases 会把它也当成「第一次看见」，凭空多触发两次。
+	var bsph2: TDWaveSpawner = TDWaveSpawner.new()
+	bsph2.auto_tick = false
+	bsph2.configure(content)
+	root.add_child(bsph2)
+	var bp2: BossPhases = BossPhases.new()
+	bp2.setup(bsph2, content)
+	var seen2: Array[int] = []
+	bp2.phase_changed.connect(func(p: int, _t: String, _d: String) -> void: seen2.append(p))
+	var quick: TDEnemy = TDEnemy.new()
+	quick.id = &"boss"
+	quick.setup(PATH, 1000.0, 30.0, 130)
+	bsph2.add_child(quick)
+	bsph2.enemies.append(quick)
+	bp2.tick(0.016)
+	quick.hp = 300.0
+	bp2.tick(0.016)
+	check(seen2.size() == 2, "一次跨两档会依次触发两次，实际 %d 次" % seen2.size())
+	check(bp2.phase_of(quick) == 3, "跨档后停在第三阶段")
+
+	section("run_report")
+	## 归因必须按「掉了多少血」排，不能按只数。
+	## 3 只重装（2 血）比 4 只斥候（1 血）更致命，但按只数会把斥候排第一。
+	var rr: RunReport = RunReport.new()
+	rr.setup(content)
+	rr.total_waves = content.waves.size()
+	rr.waves_cleared = 11
+	rr.max_lives = 16
+	rr.lives_left = 0
+	for i: int in range(3):
+		var b: TDEnemy = _enemy(10.0, 10.0)
+		b.id = &"brute"
+		b.leak_damage = 2
+		rr.record_leak(b)
+	for i: int in range(4):
+		var s: TDEnemy = _enemy(10.0, 10.0)
+		s.id = &"scout"
+		s.leak_damage = 1
+		rr.record_leak(s)
+	for i: int in range(20):
+		var k: TDEnemy = _enemy(10.0, 10.0)
+		k.id = &"soldier"
+		rr.record_kill(k)
+
+	check(rr.leak_count() == 7, "漏 7 只，实际 %d" % rr.leak_count())
+	check(rr.leak_damage_total() == 10, "共掉 10 血，实际 %d" % rr.leak_damage_total())
+	var bl: Dictionary = rr.blame()
+	check(str(bl.get("id", "")) == "brute",
+		"主因判给掉血最多的重装，实际 %s" % str(bl.get("id", "")))
+	check(int(bl.get("damage", 0)) == 6, "重装占 6 点，实际 %d" % int(bl.get("damage", 0)))
+	var v: Dictionary = rr.verdict()
+	check(str(v["title"]) == "基地失守", "失败标题正确")
+	check(not str(v["blame"]).is_empty(), "结算页有主因行")
+	## 建议必须提到「毒」—— 主因是重装，那就得给对付护甲的具体办法
+	check(str(v["advice"]).contains("毒"), "重装主因的建议提到毒: %s" % str(v["advice"]))
+	check((v["breakdown"] as Array).size() > 0, "构成非空")
+	check(str((v["breakdown"] as Array)[0]["id"]) == "brute", "构成第一条是重装")
+
+	## 早期崩盘：建议必须转向开局经济，而不是讲某个怪的机制
+	var early: RunReport = RunReport.new()
+	early.setup(content)
+	early.total_waves = content.waves.size()
+	early.waves_cleared = 2
+	var e2: TDEnemy = _enemy(10.0, 10.0)
+	e2.id = &"brute"
+	e2.leak_damage = 2
+	early.record_leak(e2)
+	check(early.advice().contains("开局"), "第 2 波崩，建议讲开局经济: %s" % early.advice())
+
+	## 一只没漏也输？不该出现，但 blame() 必须安全返回空而不是崩溃
+	var clean: RunReport = RunReport.new()
+	clean.setup(content)
+	check(clean.blame().is_empty(), "没有漏怪时 blame 返回空字典")
+	check(not clean.advice().is_empty(), "没有漏怪时也有建议")
+
+	check(RunReport.clock(204.0) == "3:24", "时长格式化，实际 %s" % RunReport.clock(204.0))
+
 	## 收尾
 	print("")
 	if _fail == 0:

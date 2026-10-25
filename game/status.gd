@@ -157,7 +157,7 @@ func try_split(e: TDEnemy) -> void:
 	var rule: Dictionary = SPLIT_ON_DEATH.get(e.id, {})
 	if rule.is_empty() or content == null or spawner == null:
 		return
-	var trimmed: PackedVector2Array = _trim_path(e)
+	var trimmed: PackedVector2Array = trim_forward_path(e)
 	if trimmed.size() < 2:
 		return
 	var into := StringName(str(rule["into"]))
@@ -175,7 +175,10 @@ func try_split(e: TDEnemy) -> void:
 ## 直接给它整条 path 是错的：setup() 会把 position 重置到 path[0]，
 ## 分裂出来的小怪会瞬间被传送回出生点。
 ## 这里只用公开字段（path / progress）反推，不碰私有的 _seg。
-func _trim_path(e: TDEnemy) -> PackedVector2Array:
+##
+## 做成 static 是因为 BOSS 召唤援军要用同一套逻辑（boss.gd）。
+## 两份实现一定会有一份漏改，路径这种东西漏一次就是「小怪凭空出现在起点」。
+static func trim_forward_path(e: TDEnemy) -> PackedVector2Array:
 	var out := PackedVector2Array([e.position])
 	var walked: float = 0.0
 	for i: int in range(1, e.path.size()):
