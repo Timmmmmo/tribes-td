@@ -15,6 +15,15 @@ const CARD_GAP := 8.0
 const ACTION_Y := 1012.0
 const ACTION_H := 78.0
 
+## 战场控制条拆成三块，职责单一：
+##   左 = 开波（唯一一个「主动承担风险换收益」的按钮）
+##   中 = 情报（常态）/ 塔操作（选中塔时）
+##   右 = 英雄
+## 之前这一条只放塔的升级/出售，不选塔的时候整条是空的 —— 是屏幕上最贵的一段空白。
+const WAVE_BTN := Rect2(20, 1018, 218, 72)
+const INTEL_BOX := Rect2(248, 1018, 244, 72)
+const HERO_BOX := Rect2(502, 1018, 198, 72)
+
 const BG := Color("#0B1420")
 const PANEL := Color("#16232F")
 const PANEL_HI := Color("#20323F")
@@ -162,35 +171,144 @@ func _draw_top() -> void:
 
 
 func _draw_actions() -> void:
-	var t: TDTower = main.selected_tower
-	if t == null or not is_instance_valid(t):
+	_draw_wave_button()
+	_draw_intel()
+	_draw_hero_box()
+
+
+## 左块：开波。准备阶段给「提前开波能多拿多少金币」，进行中给「第几波 / 场上几只」。
+func _draw_wave_button() -> void:
+	var sp: TDWaveSpawner = main.spawner
+	if sp == null:
 		return
-	var r := Rect2(16, ACTION_Y, W - 32, ACTION_H)
-	_panel(r, 14.0, Color("#1B2A37"), Color("#131E28"), LINE)
+	var next_no: int = sp.wave_index + 2
+	var cleared: bool = sp.wave_index + 1 >= sp.waves.size() and sp.enemies_left_in_wave() <= 0
 
-	text(Vector2(34, ACTION_Y + 8), "%s  Lv.%d" % [t.display_name, t.level], 21, TEXT)
-	text(Vector2(34, ACTION_Y + 38),
-		"伤害 %.0f · 射程 %d · 击杀 %d" % [t.damage, int(t.range_px), t.kills], 14, DIM)
+	if cleared:
+		_panel(WAVE_BTN, 14.0, Color("#1C3A2C"), Color("#14281F"), Color("#2E5A44"))
+		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 18, "已通关", 22, Color("#8BE0A8"))
+		return
 
-	# 升级
-	var uc: int = t.upgrade_cost()
-	var can_up: bool = t.can_upgrade()
-	var up_rect := Rect2(W - 320, ACTION_Y + 12, 140, 54)
-	if can_up:
-		_panel(up_rect, 12.0, Color("#1F4A47"), Color("#153230"), TEAL)
-		TDArt.glow(self, up_rect.get_center(), 70.0, Color(0.12, 0.62, 0.56, 0.22))
+	if main.is_prep_phase():
+		var bonus: int = main.early_wave_bonus()
+		_panel(WAVE_BTN, 14.0, Color("#4A3A16"), Color("#2A2110"), AMBER)
+		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 8, "开波", 23, AMBER)
+		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 38,
+			"第 %d 波 · 提前 +%d 金币" % [next_no, bonus], 12, Color("#E8D3A0"))
+		var bar := Rect2(WAVE_BTN.position.x + 14, WAVE_BTN.end.y - 13, WAVE_BTN.size.x - 28, 5)
+		TDArt.fill(self, TDArt.round_rect(bar, 2.5, 3), Color(0, 0, 0, 0.45))
+		var ratio: float = main.prep_progress()
+		if ratio > 0.01:
+			TDArt.fill(self, TDArt.round_rect(
+				Rect2(bar.position, Vector2(maxf(bar.size.x * ratio, 6.0), bar.size.y)), 2.5, 3), AMBER)
 	else:
-		_panel(up_rect, 12.0, Color("#1A2430"), Color("#141C24"), LINE)
-	text_c(up_rect.get_center().x, up_rect.position.y + 9, "升级", 17, TEXT if can_up else DIM)
-	text_c(up_rect.get_center().x, up_rect.position.y + 30,
-		("%d 金币" % uc) if can_up else "已满级", 13, AMBER if can_up else DIM)
+		_panel(WAVE_BTN, 14.0, Color("#1B2A37"), Color("#131E28"), LINE)
+		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 12,
+			"第 %d 波 进行中" % maxi(sp.wave_index + 1, 1), 17, TEXT)
+		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 40,
+			"场上 %d 只" % sp.enemies_left_in_wave(), 12, DIM)
 
-	# 出售
-	var sell_rect := Rect2(W - 168, ACTION_Y + 12, 136, 54)
-	_panel(sell_rect, 12.0, Color("#33201F"), Color("#221616"), Color("#6B3030"))
-	text_c(sell_rect.get_center().x, sell_rect.position.y + 9, "出售", 17, TEXT)
-	text_c(sell_rect.get_center().x, sell_rect.position.y + 30,
-		"+%d 金币" % t.sell_value(), 13, Color("#E0A0A0"))
+
+## 中块：没选塔时是下一波情报，选了塔时是塔操作。
+## 情报只给「下一波」，不给下两波 —— 手机上一屏塞两波等于两波都没看。
+func _draw_intel() -> void:
+	var t: TDTower = main.selected_tower
+	if t != null and is_instance_valid(t):
+		_draw_tower_actions(t)
+		return
+
+	_panel(INTEL_BOX, 14.0, Color("#1B2A37"), Color("#131E28"), LINE)
+	var rows: Array = main.next_wave_hint()
+	var px: float = INTEL_BOX.position.x + 12
+	text(Vector2(px, INTEL_BOX.position.y + 5), "下一波", 12, DIM)
+	if rows.is_empty():
+		text(Vector2(px, INTEL_BOX.position.y + 32), "没有更多波次了", 15, TEAL)
+		return
+
+	var x: float = px
+	var y: float = INTEL_BOX.position.y + 26
+	for i: int in range(mini(rows.size(), 3)):
+		var r: Dictionary = rows[i]
+		var col: Color = r["color"]
+		draw_circle(Vector2(x + 5, y + 7), 5.0, col, true, -1.0, true)
+		var line: String = "%d %s" % [int(r["count"]), str(r["name"])]
+		var w: float = _font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		if x + 16.0 + w > INTEL_BOX.end.x - 8:
+			break
+		text(Vector2(x + 15, y), line, 13, TEXT)
+		x += 22.0 + w
+
+	var hint: String = WaveIntel.hint(rows)
+	if hint != "":
+		text(Vector2(px, INTEL_BOX.end.y - 22), hint, 12, Color("#E8B45C"))
+
+
+func _up_rect() -> Rect2:
+	return Rect2(INTEL_BOX.position.x + 8, INTEL_BOX.position.y + 38, 108, 30)
+
+
+func _sell_rect() -> Rect2:
+	return Rect2(INTEL_BOX.position.x + 124, INTEL_BOX.position.y + 38, 108, 30)
+
+
+func _draw_tower_actions(t: TDTower) -> void:
+	_panel(INTEL_BOX, 14.0, Color("#1B2A37"), Color("#131E28"), LINE)
+	text(Vector2(INTEL_BOX.position.x + 12, INTEL_BOX.position.y + 3),
+		"%s Lv.%d" % [t.display_name, t.level], 17, TEXT)
+	text(Vector2(INTEL_BOX.position.x + 12, INTEL_BOX.position.y + 23),
+		"伤害 %.0f · 射程 %d · 击杀 %d" % [t.damage, int(t.range_px), t.kills], 12, DIM)
+
+	var up: Rect2 = _up_rect()
+	var can_up: bool = t.can_upgrade()
+	if can_up:
+		_panel(up, 9.0, Color("#1F4A47"), Color("#153230"), TEAL)
+	else:
+		_panel(up, 9.0, Color("#1A2430"), Color("#141C24"), LINE)
+	text_c(up.get_center().x, up.position.y + 4, "升级", 14, TEXT if can_up else DIM)
+	text_c(up.get_center().x, up.position.y + 20,
+		(str(t.upgrade_cost()) + " 金币") if can_up else "已满级", 11, AMBER if can_up else DIM)
+
+	var sell: Rect2 = _sell_rect()
+	_panel(sell, 9.0, Color("#33201F"), Color("#221616"), Color("#6B3030"))
+	text_c(sell.get_center().x, sell.position.y + 4, "出售", 14, TEXT)
+	text_c(sell.get_center().x, sell.position.y + 20, "+%d 金币" % t.sell_value(), 11, Color("#E0A0A0"))
+
+
+## 右块：英雄。三个装备格不是装饰 —— 「剑/护符/靴」三色对应
+## 攻击力 / 攻速 / 移速+射程，玩家扫一眼就知道自己这套装备在往哪个方向长。
+func _draw_hero_box() -> void:
+	var h: HeroUnit = main.hero
+	if h == null:
+		return
+	_panel(HERO_BOX, 14.0, Color("#2E2716"), Color("#1A170E"), Color("#5A4A22"))
+
+	var c := Vector2(HERO_BOX.position.x + 26, HERO_BOX.get_center().y)
+	TDArt.glow(self, c, 26.0, Color(0.92, 0.74, 0.32, 0.35))
+	draw_circle(c, 15.0, Color("#E8BC62"), true, -1.0, true)
+	draw_circle(c, 15.0, Color(0.10, 0.07, 0.03, 0.92), false, 2.0, true)
+	# 头像是把剑，不是一个「英雄」二字 —— 10px 的中文在圆圈里读不出来
+	draw_line(c + Vector2(0, 6), c + Vector2(0, -7), Color("#2A2110"), 2.4, true)
+	draw_line(c + Vector2(-4, 2), c + Vector2(4, 2), Color("#2A2110"), 2.0, true)
+
+	text(Vector2(HERO_BOX.position.x + 48, HERO_BOX.position.y + 2),
+		"Lv.%d  攻 %.0f" % [h.level, h.attack()], 13, Color("#E8D3A0"))
+
+	var sx: float = HERO_BOX.position.x + 48
+	var sy: float = HERO_BOX.position.y + 26
+	for i: int in range(HeroUnit.SLOTS.size()):
+		var kind: String = HeroUnit.SLOTS[i]
+		var lvl: int = h.slot_level(kind)
+		var r := Rect2(sx + float(i) * 34.0, sy, 28, 30)
+		var col: Color = HeroUnit.SLOT_COLORS.get(kind, Color.WHITE)
+		var shape: PackedVector2Array = TDArt.round_rect(r, 7.0, 4)
+		if lvl > 0:
+			TDArt.fill(self, shape, Color(col.r * 0.30, col.g * 0.30, col.b * 0.30, 1.0))
+			draw_polyline(TDArt.closed(shape), col, 1.6, true)
+			text_c(r.get_center().x, r.position.y + 3, "★%d" % lvl, 12, col)
+		else:
+			TDArt.fill(self, shape, Color(0, 0, 0, 0.35))
+			draw_polyline(TDArt.closed(shape), Color(0.34, 0.31, 0.21, 1.0), 1.0, true)
+			text_c(r.get_center().x, r.position.y + 5, str(HeroUnit.SLOT_NAMES.get(kind, "?")), 11, DIM)
 
 
 func _draw_cards() -> void:
@@ -366,15 +484,20 @@ func _hit_top(p: Vector2) -> bool:
 
 
 func _hit_actions(p: Vector2) -> bool:
-	var t: TDTower = main.selected_tower
-	if t == null or not is_instance_valid(t):
-		return false
+	# 整条控制带一律吞掉输入：宁可点了没反应，也不能穿透到棋盘上造出一座塔。
 	if p.y < ACTION_Y or p.y > ACTION_Y + ACTION_H:
 		return false
-	if Rect2(W - 320, ACTION_Y + 12, 140, 54).has_point(p):
-		main.try_upgrade(t)
-	elif Rect2(W - 168, ACTION_Y + 12, 136, 54).has_point(p):
-		main.try_sell(t)
+	if WAVE_BTN.has_point(p):
+		main.start_wave_early()
+		return true
+	var t: TDTower = main.selected_tower
+	if t != null and is_instance_valid(t):
+		if _up_rect().has_point(p):
+			main.try_upgrade(t)
+			return true
+		if _sell_rect().has_point(p):
+			main.try_sell(t)
+			return true
 	return true
 
 

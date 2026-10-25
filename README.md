@@ -32,7 +32,7 @@ GitHub Pages 托管，纯静态、无分享码、无鉴权、无 Cookie，转发
 
 | 实现 | 位置 | 用途 |
 |---|---|---|
-| **Godot 版（typed GDScript）** | `game/` `addons/` `scenes/` | 主目标形态。已通过 128 项 headless 自测，可导出 Web。 |
+| **Godot 版（typed GDScript）** | `game/` `addons/` `scenes/` | 主目标形态。已通过 156 项 headless 自测，可导出 Web。 |
 | Web 版（canvas 2D） | `web/src/` → `web/index.html` | 纯 JS 重写，零构建、秒开，美术反而更好。 |
 
 两版共用同一套数值表 `data/content.json`（生成脚本 `tools/gen_content.py` 会把它复制到 `web/`），
@@ -46,7 +46,7 @@ GitHub Pages 托管，纯静态、无分享码、无鉴权、无 Cookie，转发
 # 1) 导入资源（首次、或新增了素材后跑）
 godot --headless --path . --import
 
-# 2) headless 自测：期望 RESULT: PASS 128 checks, 0 failures
+# 2) headless 自测：期望 RESULT: PASS 156 checks, 0 failures
 godot --headless --path . -s res://tests/run_tests.gd
 
 # 3) 导出网页版（需要 export templates，或跑下面的抽模板脚本）
@@ -126,7 +126,11 @@ GitHub Pages 这条路的好处：**没有分享码、没有鉴权、没有 Cook
 | 竖屏 HUD（自绘 + 手动命中测试） | ✅ 完成 |
 | 三个主动技能（增援 / 冰封 / 裁决） | ✅ 完成 |
 | 人口系统、档位解锁、档内升级、出售 | ✅ 完成 |
-| 毒 / 弹射 / 眩晕的**真机制** | ⏳ 未做，当前用溅射 + 减速近似（见 ROADMAP） |
+| 敌人**真机制**：毒（无视护甲）/ 眩晕 / 分裂 | ✅ 完成，包在 `game/status.gd`，不改内核 |
+| 波次情报 + 手动开波 + 提前开波奖励 | ✅ 完成，「等」变成「要不要现在开」 |
+| 英雄单位：拖动 / 自动索敌 / 装备三槽 | ✅ 完成，击杀给金币不给功勋 |
+| 装备掉落 + 三合一合成 | ✅ 完成 |
+| 弹射 / 召唤物 | ⏳ 未做（见 ROADMAP 迭代二） |
 | 局外养成（六条职业线）、异步 PvP | ⏳ 未开始（属于迭代三） |
 | 美术（Web 版） | ✅ 程序化绘制：地形预渲染、八边形石台塔、粒子、飘字、渐变 HUD |
 | 美术（Godot 版） | ✅ 程序化绘制，与 Web 版同档：地形烘焙、石台/符文环、渐变塔身、敌人面部、玻璃面板 HUD |
@@ -136,7 +140,7 @@ GitHub Pages 这条路的好处：**没有分享码、没有鉴权、没有 Cook
 | 环节 | 结果 |
 |---|---|
 | `--headless --import` | 通过，零错误 |
-| `--headless -s res://tests/run_tests.gd` | **PASS 128 checks, 0 failures** |
+| `--headless -s res://tests/run_tests.gd` | **PASS 156 checks, 0 failures** |
 | `--write-movie` 真实渲染 | 逐帧看过：地形分层、塔、敌人、特效、HUD 全部正常 |
 | `--headless --export-release "Web"` | 38MB wasm + 232KB pck（资源全程序化，pck 里只有数值表、字体、脚本） |
 | GitHub Pages 线上 | 已验证打开、可玩 |
@@ -173,7 +177,9 @@ godot --headless --path . -s res://tests/run_tests.gd
 |---|---|---|
 | 选塔 | 点下方卡片 | 点下方卡片 |
 | 造塔 | 点地图格子 | 点地图格子 |
-| 选中/升级/出售 | 点已有塔 → 上方出现操作条 | 同 |
+| 选中/升级/出售 | 点已有塔 → 中部控制条变成塔操作 | 同 |
+| **开下一波** | 点左下「开波」/ `空格` | 点左下「开波」 |
+| **移动英雄** | 按住英雄拖到目标位置 | 同 |
 | 解锁下一档 | 点顶部进度条 / `K` | 点顶部进度条 |
 | 换部族 | 点右上角部族条 / `Tab` | 点右上角部族条 |
 | 技能 | `1` `2` `3` | 点底部技能按钮 |
@@ -207,12 +213,16 @@ game/merit.gd       功勋系统：第二资源 / 档位解锁 / 人口 / 主动
 game/art.gd         程序化美术层：地形烘焙、顶点色渐变、软光斑、几何构造
 game/main.gd        状态机、输入、建造校验、棋盘与单位自绘、特效层
 game/hud.gd         竖屏 HUD，全自绘 + 手动命中测试
+game/intel.gd       波次情报：把波次数据翻译成「下一波 12 只重装 · 需要高单伤或毒」
+game/status.gd      敌人状态机：毒 / 眩晕 / 分裂（包一层，一行内核代码都没改）
+game/hero.gd        英雄 + 装备三槽 + 三合一合成
 web/                可玩的 canvas 2D 版。index.html 是打包产物（单文件），源码在 web/src/
 web/src/js/         core.js（纯逻辑）/ render.js（全程序化绘制）/ main.js（引导与输入）
 tools/build_web.py  把 web/src 内联成单文件 index.html
 data/content.json   数值表（由 tools/gen_content.py 生成，不要手改）
 tools/gen_content.py 数值生成器，带自查断言
 tests/run_tests.gd  headless 自测
+docs/FUN.md         原版乐趣拆解、当前 demo 的五个病症、MVP 边界与执行顺序
 docs/               设计决策 / 迭代路线 / 素材许可
 ```
 
@@ -243,7 +253,8 @@ Godot 的 Web 导出里 `SystemFont` 查不到宿主字体，中文会全变豆�
 
 ## 已知限制
 
-1. 毒 / 弹射 / 眩晕只有近似（溅射 + 减速），没有独立机制。
+1. 弹射 / 召唤物还没做；毒 / 眩晕 / 分裂已经是真机制。BOSS 没有阶段转换，第 15 波目前只是「更厚的大怪」。
+2. 没有结算归因页 —— 输了不知道死因，这条是 MVP 的最后一块（见 docs/FUN.md）。
 2. 只有 1 张地图、1 个难度。原版的「灾厄 / 大灾变」难度阶梯未做。
 3. 没有存档、没有局外成长、没有联网。
 4. 两个版本都没有音效，也没有做多语言。
