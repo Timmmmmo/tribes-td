@@ -22,6 +22,24 @@ const PREP_TIME := 12.0
 ## 提前开波，每省下 1 秒换多少金币。12 秒全换 = 24 金币 ≈ 半个 T1 塔。
 const EARLY_BONUS_PER_SEC := 2
 
+## 开局第一波的等待时间。**故意比 PREP_TIME 短得多。**
+##
+## 之前开局也是 12 秒准备期，于是玩家进游戏的整整 12 秒里，屏幕上没有任何
+## 会动的东西 —— 一个空棋盘、三张卡、一个倒计时。这是前 10 秒留不住人的
+## 唯一原因，不是机制不够多。
+##
+## 2 秒不等于「2 秒后挨打」：教学波的步兵爬完整条路要三十多秒，
+## 它只是让棋盘立刻有活物在走，玩家的「造塔」由此从「布置作业」变成「迎敌」。
+##
+## 这 2 秒必须比 INTRO_SCAN 长一点点。扫描光走到基地、玩家看清路，
+## 然后才是出生门的红环和第一只怪 —— 顺序反了就是「字还没看完就来事了」，
+## 而这两件事叠在一起的那一帧，玩家实际上两件都没看到。
+const OPENING_DELAY := 2.0
+
+## 开场沿路径扫一遍的光带（秒）。纯视觉，但它一次性回答了三个问题：
+## 路从哪来、往哪去、我要守的是哪个点。用文字说这三件事要三行，没人读。
+const INTRO_SCAN := 1.8
+
 ## 装备掉落概率与上限。上限是为了不让棋盘被掉落物铺满 —— 掉落物是「奖励」，
 ## 一旦变成地上的垃圾，玩家就不会为了它去动英雄。
 const DROP_CHANCE := 0.14
@@ -57,6 +75,22 @@ var status_time: float = 0.0
 ## 准备阶段：_awaiting_wave 为真时 prep_left 在倒数，数到 0 自动开波。
 var prep_left: float = 0.0
 var _awaiting_wave: bool = false
+
+## 开场动画进度（秒）。超过 INTRO_SCAN 就不再画扫描光。
+var _intro_t: float = 0.0
+## 开局给玩家的「推荐位」：路径两侧的空格，画成呼吸圆环。
+## 塔防首局最大的流失点不是「不知道造什么」，是「不知道往哪放」——
+## 卡片上写了伤害射程，但没有一个字告诉你该点地图上哪一格。
+var _hints: Array[Vector2i] = []
+## 首杀专属标记：第一次击杀要给得更重，那是玩家对这一局的第一印象。
+var _first_blood: bool = true
+## 飞向金币栏的金币：[{from, t, life, amount}]
+var _coin_fly: Array[Dictionary] = []
+## 功勋最近一次变化距今多少秒，以及上一帧看到的功勋值。
+## HUD 用 merit_pop_t 做数字弹跳：双资源是这个游戏和别的塔防唯一的结构差异，
+## 但「数字 +1」本身太小，不动一下就没人会发现它存在。
+var merit_pop_t: float = 99.0
+var _merit_seen: int = 0
 
 ## 结算。run_over 为真时整个玩法循环停摆，只留结算页和「再来一局」。
 ## over_time 是结算后经过的秒数，用来挡掉「结束瞬间那一下点击」——
@@ -149,16 +183,33 @@ func restart() -> void:
 	run_over = false
 	over_time = 0.0
 
+	# 英雄开局站在**第二个弯道**，不是入口。
+	#
+	# 放在入口试过：英雄射程 118、DPS 10.6，一个人就能把第一波三只全吃了，
+	# 塔从头到尾不开火 —— 玩家学会的是「拖英雄就行」，而功勋永远是 0，
+	# 一局下来一张新卡都解锁不了。
+	#
+	# 放在这里，第一波必须先过塔那一关；漏过来的才轮得到英雄。
+	# 「塔是主力、英雄是救火队」这条关系，靠位置讲比靠教程讲有效得多。
 	var hero_start: Vector2 = spawner.map.cell_center(Vector2i(1, 3))
 	hero = HeroUnit.new()
 	hero.reset(hero_start)
 	_items.clear()
-	prep_left = PREP_TIME
+	# 开局只等 OPENING_DELAY，不等完整的 12 秒。后续波次仍然等 PREP_TIME。
+	prep_left = OPENING_DELAY
 	_awaiting_wave = true
 	_hero_drag = false
+	_intro_t = 0.0
+	_first_blood = true
+	_coin_fly.clear()
+	merit_pop_t = 99.0
+	_merit_seen = 0
+	_hints = _pick_hint_cells(3)
 
 	selected_tower = null
-	toast("选一个部族，点地图造塔。塔的击杀会攒功勋。")
+	# 开局这句话要短。前 10 秒里玩家能读的字不超过 12 个，
+	# 说三件事等于一件都没说 —— 剩下的靠光圈和脉冲卡自己讲。
+	toast("怪来了，先造一座塔")
 	_ensure_hud()
 	if _demo_requested():
 		_apply_demo()
@@ -166,6 +217,8 @@ func restart() -> void:
 		_apply_report_demo()
 	if _flag("--boss-demo"):
 		_apply_boss_demo()
+	if _flag("--teach-demo") or _query_has("teach"):
+		_apply_teach_demo()
 
 
 ## 统一的调试开关判定。命令行传 `--xxx`，网页传 `?xxx=1`。
@@ -248,6 +301,24 @@ func _apply_boss_demo() -> void:
 	toast("BOSS 演示：直接进最后一波")
 
 
+## 前 10 秒演示：按提示位把开局能造的都造出来，不打乱其他任何东西。
+##
+## 和 `--demo` 的差别是「不布防」：画面和真实首局一样空，只有开局那几座。
+## 用它逐帧检查那条链是否连得上 —— 造塔 → 开火 → 击杀 → 功勋 +1 → 金币飞进金币栏。
+## 这条链断了，前 10 秒就只剩动画，那和看片头没区别。
+func _apply_teach_demo() -> void:
+	var built: int = 0
+	for cell: Vector2i in _hints.duplicate():
+		var t: TDTower = content.make_tower(build_id)
+		if not spawner.place_tower_at_cell(t, cell):
+			continue
+		if report.towers_built == built:
+			_on_tower_placed(t)
+		built += 1
+	if built > 0:
+		toast("教学布防：按提示位造了 %d 座" % built)
+
+
 ## content.json 的 professions 是本项目扩展字段，TDContent 不认识，手动读一次。
 func _load_professions() -> Array:
 	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content.json"))
@@ -304,6 +375,13 @@ func _process(delta: float) -> void:
 		return
 
 	merit.sync_kills(spawner.towers, content, spawner.economy)
+	# 功勋跳动。双资源是本作和别的塔防唯一的结构性区别，但「右边那个数字 +1」
+	# 是个极小的事件 —— 不弹一下，玩家到通关都不会意识到还有第二套资源。
+	if merit.merit != _merit_seen:
+		_merit_seen = merit.merit
+		merit_pop_t = 0.0
+	else:
+		merit_pop_t += delta
 	report.duration += delta
 	report.lives_left = spawner.economy.lives
 	report.hero_level = hero.level if hero != null else 1
@@ -345,7 +423,23 @@ func _tick_waves(delta: float) -> void:
 	prep_left = maxf(0.0, prep_left - delta)
 	if prep_left <= 0.0:
 		_awaiting_wave = false
+		_alarm()
 		spawner.start_next_wave()
+
+
+## 开波的一瞬给一次「敌袭」：入口红环 + 轻震屏。
+##
+## 没有这一下，玩家要等怪物走进视野才意识到开始了 —— 从出生点到视野
+## 还隔着一段屏幕外的路。这一下把「开始」变成一个可感知的时刻，
+## 而且它发生在玩家刚点完按钮之后，等于告诉他「你点的东西生效了」。
+func _alarm() -> void:
+	_shake = maxf(_shake, 0.26)
+	var poly: PackedVector2Array = spawner.path
+	if poly.size() < 2:
+		return
+	var gate: Vector2 = Vector2(clampf(poly[1].x, 20.0, BOARD_SIZE.x - 20.0), poly[1].y)
+	_rings.append({"pos": gate, "r0": 16.0, "r1": 120.0,
+		"color": Color(1.0, 0.36, 0.48, 1.0), "life": 0.55, "t": 0.0})
 
 
 ## 玩家点「开波」。剩下的准备时间按秒折金币 —— 这是这一版里
@@ -362,6 +456,7 @@ func start_wave_early() -> void:
 		spawner.economy.earn(reward)
 		_float_text(hero.pos + Vector2(0, -30), "+%d 金币" % reward, Color("#F2C14E"), 17)
 		toast("提前开波，多拿 %d 金币" % reward)
+	_alarm()
 	spawner.start_next_wave()
 
 
@@ -376,6 +471,22 @@ func is_prep_phase() -> bool:
 	return _awaiting_wave and spawner != null and not spawner.is_game_over()
 
 
+## 开局那一小段（第一波还没出）。
+##
+## HUD 要据此换措辞：这段里「提前开波 +4 金币」是纯粹噪音 ——
+## 玩家连路在哪都没看清，跟他谈折价换金币没有意义。
+func is_opening() -> bool:
+	return _awaiting_wave and spawner != null and spawner.wave_index < 0
+
+
+## 还没造出第一座塔。HUD 拿它决定要不要给最便宜那张卡做脉冲。
+##
+## 前 10 秒里玩家只能做一个决定，「第一个决定」不该是「五张卡里读三遍再比价」。
+## 高亮最便宜那张，等于替他把这一步走完。
+func needs_first_tower_hint() -> bool:
+	return not run_over and report != null and report.towers_built == 0
+
+
 ## 提前开波能拿多少金币（HUD 要显示这个数，玩家才会算这笔账）。
 func early_wave_bonus() -> int:
 	return int(ceil(prep_left)) * EARLY_BONUS_PER_SEC if _awaiting_wave else 0
@@ -383,7 +494,10 @@ func early_wave_bonus() -> int:
 
 ## 准备阶段还剩多少比例（1 = 刚开始，0 = 马上自动开波）。
 func prep_progress() -> float:
-	return clampf(prep_left / PREP_TIME, 0.0, 1.0)
+	# 开局那一段的倒计时基准是 OPENING_DELAY，不是 PREP_TIME ——
+	# 拿 12 秒当分母，进度条会永远停在 13% 附近不动，玩家以为卡了。
+	var span: float = OPENING_DELAY if is_opening() else PREP_TIME
+	return clampf(prep_left / maxf(span, 0.01), 0.0, 1.0)
 
 
 func _tick_hero(delta: float) -> void:
@@ -457,7 +571,15 @@ func _on_split_requested(into: StringName, hp: float, speed: float, bounty: int,
 
 func _tick_effects(delta: float) -> void:
 	_time += delta
+	_intro_t += delta
 	_shake = maxf(0.0, _shake - delta * 3.2)
+
+	var coins: Array[Dictionary] = []
+	for c: Dictionary in _coin_fly:
+		c["t"] = float(c["t"]) + delta
+		if float(c["t"]) < float(c["life"]):
+			coins.append(c)
+	_coin_fly = coins
 
 	var alive: Array[Dictionary] = []
 	for p: Dictionary in _particles:
@@ -496,6 +618,17 @@ func _tick_effects(delta: float) -> void:
 		if float(b["t"]) < float(b["life"]):
 			alive.append(b)
 	_beams = alive
+
+	# 排查用：加 --trace-tower 会每秒打印每座塔的射程/伤害/击杀数，
+	# 以及场上每只怪到它的距离。改数值之后确认「塔到底有没有在打」全靠它 ——
+	# 画面上「塔在打」和「塔没打但怪在掉血」长得一模一样，光看截图分不出来。
+	if _flag("--trace-tower") and Engine.get_process_frames() % 30 == 0:
+		for t: TDTower in spawner.towers:
+			var line: String = "T pos=%s r=%.0f dmg=%.1f int=%.2f k=%d |" % [
+				str(t.position), t.range_px, t.damage, t.fire_interval, t.kills]
+			for e: TDEnemy in spawner.enemies:
+				line += " %s d=%.0f hp=%.0f" % [e.id, t.position.distance_to(e.position), e.hp]
+			print(line)
 
 	for k: int in _flash.keys():
 		var v: float = float(_flash[k]) - delta
@@ -668,11 +801,92 @@ func _on_enemy_spawned(e: TDEnemy) -> void:
 	e.leaked.connect(_on_enemy_leaked)
 
 
+## 沿路径挑几个「推荐造塔格」。
+##
+## 只扫路径**前 22%**，这是刻意的：第一座塔必须打得到第一只怪。
+## 按 24%/48%/72% 均匀撒点的话，第一个圈落在整条路的中段，
+## 第一只怪要爬二十多秒才进射程 —— 玩家会以为塔坏了，
+## 然后开始点塔看它为什么不开火。这类「机制没坏但看起来坏了」的体验，
+## 比数值太弱更劝退。
+##
+## 硬编码坐标换一张地图就废了，所以按路径弧长采样，再往法线方向探一格。
+func _pick_hint_cells(n: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if spawner == null or spawner.map == null:
+		return out
+	var poly: PackedVector2Array = spawner.path
+	if poly.size() < 2:
+		return out
+	var segs: Array[float] = []
+	var total: float = 0.0
+	for i: int in range(1, poly.size()):
+		var d: float = poly[i - 1].distance_to(poly[i])
+		segs.append(d)
+		total += d
+	if total <= 0.0:
+		return out
+
+	var map: TDMap = spawner.map
+	# 英雄占的格子要避开：塔和英雄叠在同一格，两者都看不清
+	var hero_cell: Vector2i = map.cell_at(hero.pos) if hero != null else Vector2i(-99, -99)
+	var edge: float = 44.0
+	var dist: float = 60.0
+	var limit: float = total * 0.16
+	while dist <= limit and out.size() < n:
+		var at: Vector2 = _sample_path(poly, segs, dist)
+		var ahead: Vector2 = _sample_path(poly, segs, minf(dist + 12.0, total))
+		var dir_v: Vector2 = ahead - at
+		if dir_v.length() > 0.01:
+			var nd: Vector2 = dir_v.normalized()
+			var normal := Vector2(-nd.y, nd.x)
+			var best_cell := Vector2i(-99, -99)
+			var best_score: float = 1e20
+			for side: float in [1.0, -1.0]:
+				var cell: Vector2i = map.cell_at(at + normal * (map.cell_px * side))
+				if not map.can_build(cell) or out.has(cell):
+					continue
+				if cell == hero_cell:
+					continue
+				var ctr: Vector2 = map.cell_center(cell)
+				# 贴屏幕边的格子不放塔：一半射程在屏幕外，看着就像废塔
+				if ctr.x < edge or ctr.x > BOARD_SIZE.x - edge \
+						or ctr.y < edge or ctr.y > BOARD_SIZE.y - edge:
+					continue
+				# 太挤的两个圈没有意义：它们覆盖同一小段路，等于只教了一次
+				var crowded: bool = false
+				for got: Vector2i in out:
+					if map.cell_center(got).distance_to(ctr) < 88.0:
+						crowded = true
+						break
+				if crowded:
+					continue
+				# 两侧都可建时取离棋盘中心近的一侧，视觉上更像「防线」而不是「边角」
+				var score: float = ctr.distance_to(BOARD_SIZE * 0.5)
+				if score < best_score:
+					best_score = score
+					best_cell = cell
+			if best_cell.x >= 0:
+				out.append(best_cell)
+		dist += 30.0
+	return out
+
+
 func _on_tower_placed(t: TDTower) -> void:
 	# td_core 的塔默认会自绘「灰方块 + 射程圈」用于调试，正式渲染由本文件接管
 	t.debug_draw = false
 	t.fired.connect(_on_tower_fired.bind(t))
 	report.towers_built += 1
+	# 造下去就把最近的提示圈拿掉：光圈的意义是「这里可以」，不是「这里必须」。
+	# 若一直留着，玩家会以为那是关卡强制点位。
+	var best: int = -1
+	var best_d: float = 1e20
+	for i: int in range(_hints.size()):
+		var d: float = spawner.map.cell_center(_hints[i]).distance_to(t.position)
+		if d < best_d:
+			best_d = d
+			best = i
+	if best >= 0:
+		_hints.remove_at(best)
 
 
 func _on_gold_changed(gold: int) -> void:
@@ -709,6 +923,18 @@ func _on_enemy_killed(e: TDEnemy) -> void:
 		"color": Color(1.0, 0.85, 0.5, 1.0), "life": 0.34, "t": 0.0})
 	# 赏金是这只怪给的，飘字挂在怪身上，玩家才能把「击杀 → 金币」连起来
 	_float_text(e.position + Vector2(0, -6), "+%d" % e.bounty, Color("#F2C14E"), 15)
+	# 飘字只在原地淡出。再补一条飞向金币栏的小金币 ——
+	# 「打死了 → 左上角那个数字变多了」这条因果，光靠同一屏两处独立变化是连不起来的，
+	# 尤其是首局玩家还在同时读三张塔卡。
+	_coin_fly.append({"from": e.position, "t": 0.0, "life": 0.5, "amount": e.bounty})
+	# 首杀：整局只有一次，做成「主角时刻」。玩家对这一局的第一印象就是这一下。
+	if _first_blood:
+		_first_blood = false
+		_shake = maxf(_shake, 0.42)
+		_rings.append({"pos": e.position, "r0": 12.0, "r1": 96.0,
+			"color": Color(1.0, 0.80, 0.38, 1.0), "life": 0.55, "t": 0.0})
+		_spawn_burst(e.position, Color("#FFE7A8"), 22, 220.0)
+		_float_text(e.position + Vector2(0, -38), "首杀", Color("#FFE8A8"), 21)
 	_maybe_drop_item(e.position)
 	report.record_kill(e)
 	status.try_split(e)
@@ -971,8 +1197,10 @@ func _draw() -> void:
 
 	_draw_board_frame()
 	_draw_path_flow()
+	_draw_intro_scan()
 	_draw_gate_and_base()
 	_draw_grid()
+	_draw_hint_rings()
 	_draw_hover()
 	_draw_items()
 	_draw_towers()
@@ -982,6 +1210,7 @@ func _draw() -> void:
 	_draw_beams()
 	_draw_particles()
 	_draw_floaters()
+	_draw_coin_fly()
 	_draw_banner()
 	_draw_selection()
 
@@ -1028,12 +1257,93 @@ func _draw_path_flow() -> void:
 		draw_circle(p, 2.6, Color(0.55, 0.78, 0.90, a), true, -1.0, true)
 
 
+## 开场扫描：一条暖光从出生门沿路径推到基地，INTRO_SCAN 秒走完。
+##
+## 这是整个前 10 秒里唯一「不要求玩家做任何事」的东西。它的作用是用一秒
+## 教会三件事：路从哪来、往哪去、我要守的是哪个点。用文字讲这三件事要三行，
+## 而前 10 秒里玩家不会读第二行。
+func _draw_intro_scan() -> void:
+	if _intro_t >= INTRO_SCAN or spawner == null:
+		return
+	var poly: PackedVector2Array = spawner.path
+	if poly.size() < 2:
+		return
+	var segs: Array[float] = []
+	var total: float = 0.0
+	for i: int in range(1, poly.size()):
+		var d: float = poly[i - 1].distance_to(poly[i])
+		segs.append(d)
+		total += d
+	if total <= 0.0:
+		return
+
+	var k: float = clampf(_intro_t / INTRO_SCAN, 0.0, 1.0)
+	# 缓出：前段快、后段慢。光要在基地上停一下再走，玩家才来得及看清终点。
+	var head: float = total * (1.0 - pow(1.0 - k, 1.35))
+	var fade: float = 1.0 if k < 0.80 else 1.0 - (k - 0.80) / 0.20
+
+	# 尾巴往回拖 420px，逐点变小变淡。单点光球看不出「在往前走」，
+	# 拖尾才让方向可读；拖延迟短了在竖直段上会挤成一坨圆点。
+	var steps: int = 30
+	for i: int in range(steps):
+		var back: float = 420.0 * float(i) / float(steps)
+		var dist: float = head - back
+		if dist < 0.0:
+			continue
+		var p: Vector2 = _sample_path(poly, segs, dist)
+		var a: float = 1.0 - float(i) / float(steps)
+		draw_circle(p, 3.0 + 10.0 * a * a,
+			Color(1.0, 0.82, 0.45, 0.40 * a * fade), true, -1.0, true)
+	var hp: Vector2 = _sample_path(poly, segs, maxf(head, 0.0))
+	TDArt.glow(self, hp, 70.0, Color(1.0, 0.78, 0.36, 0.40 * fade))
+
+
+## 开局推荐位：路径两侧的呼吸圆环。
+##
+## 塔防首局最贵的流失点不是「不知道造什么」，是「不知道点哪一格」。
+## 卡面上写满了伤害射程，却没有一个字告诉你塔该放在地图的什么地方。
+## 画两个圈，这个问题就不用讲了。
+## 前三波之后自动消失 —— 教具不能变成拐杖。
+func _draw_hint_rings() -> void:
+	if _hints.is_empty() or spawner == null or spawner.wave_index > 2:
+		return
+	var pulse: float = 0.5 + 0.5 * sin(_time * 2.2)
+	for cell: Vector2i in _hints:
+		var p: Vector2 = spawner.map.cell_center(cell)
+		var r: float = 20.0 + pulse * 4.0
+		draw_arc(p, r, 0.0, TAU, 36,
+			Color(0.98, 0.78, 0.34, 0.28 + pulse * 0.26), 2.0, true)
+		TDArt.glow(self, p, 34.0, Color(0.98, 0.78, 0.34, 0.09 + pulse * 0.07))
+		# 中间一个加号：它在说「这里可以盖」，而不是「这里是关卡规定点」
+		var c := Color(0.98, 0.80, 0.38, 0.45 + pulse * 0.25)
+		draw_line(p + Vector2(-5, 0), p + Vector2(5, 0), c, 2.0, true)
+		draw_line(p + Vector2(0, -5), p + Vector2(0, 5), c, 2.0, true)
+
+
+## 击杀所得的金币沿弧线飞向左上角金币栏。
+##
+## 直线会横穿整个棋盘，看起来像一道射线；抛物线才有「打死的东西掉进兜里」的重量。
+## 这条线存在的唯一理由：让「击杀」和「左上角那个数字」在视觉上成为同一件事。
+func _draw_coin_fly() -> void:
+	if _coin_fly.is_empty():
+		return
+	var goal: Vector2 = to_local(Vector2(46, 36))
+	for c: Dictionary in _coin_fly:
+		var k: float = clampf(float(c["t"]) / maxf(float(c["life"]), 0.01), 0.0, 1.0)
+		var from: Vector2 = c["from"]
+		# 控制点抬高 110px：抬得越高，弧线越像被抛出去，而不是被吸过去
+		var ctrl: Vector2 = from.lerp(goal, 0.5) + Vector2(0.0, -110.0)
+		var p: Vector2 = from.lerp(ctrl, k).lerp(ctrl.lerp(goal, k), k)
+		var a: float = 1.0 - pow(k, 3.0)
+		draw_circle(p, 5.0 + 3.0 * (1.0 - k), Color(0.98, 0.76, 0.28, a), true, -1.0, true)
+		TDArt.glow(self, p, 16.0, Color(1.0, 0.80, 0.34, 0.22 * a))
+
+
 func _draw_gate_and_base() -> void:
 	var poly: PackedVector2Array = spawner.path
 	if poly.size() < 2:
 		return
 	var pulse: float = 0.5 + 0.5 * sin(_time * 2.6)
-
 	# 出生门：红光。第一个航点在屏幕外，标记点取格内的第一个拐角。
 	var gate: Vector2 = Vector2(clampf(poly[1].x, 20.0, BOARD_SIZE.x - 20.0), poly[1].y)
 	TDArt.glow(self, gate, 54.0, Color(0.88, 0.29, 0.43, 0.42))
@@ -1338,6 +1648,17 @@ func _draw_hero() -> void:
 	TDArt.fill(self, TDArt.ellipse(Vector2(p.x, p.y + r * 0.95), r * 0.85, r * 0.32),
 		Color(0, 0, 0, 0.38))
 	TDArt.glow(self, p, 44.0, Color(0.90, 0.72, 0.30, 0.28))
+
+	# 脚下双环，青色。这是全局唯一的青色地面环 —— 塔的符文环是琥珀色。
+	# 开局玩家看到的第一个「能操作的东西」就是它。没有这圈，英雄和棋盘上的
+	# 装饰石子没什么区别，玩家不会想到去拖它。
+	var breathe: float = 0.5 + 0.5 * sin(_time * 2.4)
+	draw_arc(p, r + 9.0 + breathe * 1.6, 0.0, TAU, 30,
+		Color(0.42, 0.88, 0.82, 0.28 + breathe * 0.18), 2.0, true)
+	# 一截转动的短弧：静止的圆环像贴图，转起来才像「待命中的单位」
+	draw_arc(p, r + 13.0, _time * 1.6, _time * 1.6 + 1.9, 20,
+		Color(0.55, 0.95, 0.88, 0.50), 2.2, true)
+
 	if _hero_drag:
 		TDArt.dashed_ring(self, p, hero.attack_range(), Color(0.95, 0.85, 0.45, 0.70),
 			2.0, 24, _time * 0.8)

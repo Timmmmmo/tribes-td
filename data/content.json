@@ -1,17 +1,17 @@
 {
- "start_gold": 150,
+ "start_gold": 120,
  "lives": 20,
  "hp_scale_per_wave": 1.14,
  "towers": [
   {
    "id": "r1",
    "name": "箭手",
-   "desc": "射速快、伤害低。前期铺三个就能过前三波。",
+   "desc": "便宜、射速快。一座塔刚好磨死一只步兵，铺多座才成阵。",
    "cost": 40,
    "tier": 1,
-   "damage": 3,
+   "damage": 5,
    "range": 132,
-   "interval": 0.5,
+   "interval": 0.45,
    "targeting": "first",
    "splash": 0,
    "hits_air": true,
@@ -24,19 +24,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 4.3,
+     "damage": 6.6,
      "range": 144,
      "interval": 0.455
     },
     {
      "cost": 64,
-     "damage": 5.5,
+     "damage": 8.2,
      "range": 156,
      "interval": 0.41
     },
     {
      "cost": 84,
-     "damage": 6.8,
+     "damage": 9.8,
      "range": 168,
      "interval": 0.365
     }
@@ -282,7 +282,7 @@
    "desc": "单体 6 点，慢，但便宜到可以堆。",
    "cost": 40,
    "tier": 1,
-   "damage": 6,
+   "damage": 10.4,
    "range": 120,
    "interval": 0.95,
    "targeting": "first",
@@ -297,19 +297,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 8.5,
+     "damage": 14.8,
      "range": 132,
      "interval": 0.864
     },
     {
      "cost": 64,
-     "damage": 11.0,
+     "damage": 19.2,
      "range": 144,
      "interval": 0.779
     },
     {
      "cost": 84,
-     "damage": 13.6,
+     "damage": 23.7,
      "range": 156,
      "interval": 0.694
     }
@@ -477,7 +477,7 @@
    "desc": "射程一般，但能打空中。",
    "cost": 40,
    "tier": 1,
-   "damage": 4,
+   "damage": 6.8,
    "range": 138,
    "interval": 0.62,
    "targeting": "first",
@@ -492,19 +492,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 5.7,
+     "damage": 9.7,
      "range": 150,
      "interval": 0.564
     },
     {
      "cost": 64,
-     "damage": 7.4,
+     "damage": 12.6,
      "range": 162,
      "interval": 0.508
     },
     {
      "cost": 84,
-     "damage": 9.0,
+     "damage": 15.3,
      "range": 174,
      "interval": 0.453
     }
@@ -672,7 +672,7 @@
    "desc": "打得很轻，但每杀一个多给 2 金币。",
    "cost": 40,
    "tier": 1,
-   "damage": 2.5,
+   "damage": 4.6,
    "range": 118,
    "interval": 0.42,
    "targeting": "first",
@@ -687,19 +687,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 3.5,
+     "damage": 6.5,
      "range": 130,
      "interval": 0.382
     },
     {
      "cost": 64,
-     "damage": 4.6,
+     "damage": 8.5,
      "range": 142,
      "interval": 0.344
     },
     {
      "cost": 84,
-     "damage": 5.6,
+     "damage": 10.3,
      "range": 154,
      "interval": 0.307
     }
@@ -867,7 +867,7 @@
    "desc": "射程只有 100，但伤害是同价两倍。",
    "cost": 40,
    "tier": 1,
-   "damage": 7,
+   "damage": 9.3,
    "range": 100,
    "interval": 0.85,
    "targeting": "first",
@@ -882,19 +882,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 9.9,
+     "damage": 13.2,
      "range": 112,
      "interval": 0.773
     },
     {
      "cost": 64,
-     "damage": 12.9,
+     "damage": 17.2,
      "range": 124,
      "interval": 0.697
     },
     {
      "cost": 84,
-     "damage": 15.8,
+     "damage": 21.1,
      "range": 136,
      "interval": 0.62
     }
@@ -1062,7 +1062,7 @@
    "desc": "均衡，没有明显短板。",
    "cost": 40,
    "tier": 1,
-   "damage": 5,
+   "damage": 7.3,
    "range": 128,
    "interval": 0.66,
    "targeting": "first",
@@ -1077,19 +1077,19 @@
    "levels": [
     {
      "cost": 44,
-     "damage": 7.1,
+     "damage": 10.3,
      "range": 140,
      "interval": 0.601
     },
     {
      "cost": 64,
-     "damage": 9.2,
+     "damage": 13.4,
      "range": 152,
      "interval": 0.541
     },
     {
      "cost": 84,
-     "damage": 11.3,
+     "damage": 16.4,
      "range": 164,
      "interval": 0.482
     }
@@ -1309,8 +1309,8 @@
    "groups": [
     {
      "enemy": "soldier",
-     "count": 6,
-     "interval": 0.9
+     "count": 3,
+     "interval": 2.4
     }
    ],
    "bonus": 22
@@ -1319,8 +1319,8 @@
    "groups": [
     {
      "enemy": "soldier",
-     "count": 8,
-     "interval": 0.8
+     "count": 6,
+     "interval": 1.0
     }
    ],
    "bonus": 26

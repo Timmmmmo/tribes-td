@@ -133,7 +133,25 @@ func _draw_top() -> void:
 	# 功勋 —— 第二资源，与金币并列同高：它是本作的核心差异，不能画成附属品
 	text(Vector2(198, 10), "功勋", 15, DIM)
 	_resource_star(Vector2(206, 52), 10.0, TEAL)
-	text(Vector2(222, 26), str(main.merit.merit), 38, TEAL)
+	# 数字弹一下。字号从 38 放大到 45 再落回，配合基线补偿，
+	# 视觉上是「跳了一下」而不是「整体往上移」。
+	var pop: float = 1.0
+	if main.merit_pop_t < 0.30:
+		pop = 1.0 + 0.19 * (1.0 - main.merit_pop_t / 0.30)
+	var mfs: int = int(round(38.0 * pop))
+	var mdy: float = float(mfs - 38) * 0.72
+	text(Vector2(222, 26 - mdy), str(main.merit.merit), mfs, TEAL)
+	if pop > 1.02:
+		TDArt.glow(self, Vector2(234, 30), 26.0 + (pop - 1.0) * 180.0,
+			Color(0.40, 0.96, 0.86, 0.20 + (pop - 1.0) * 1.6))
+	# 功勋还没解锁第一档时补一行来源说明。
+	#
+	# 开局英雄会自动打怪，玩家看到的第一幕是「金币在涨、功勋一动不动」。
+	# 没有这行字，他的第一反应是「功勋坏了」，不是「我得用塔杀」——
+	# 而这两件事对应的下一步动作完全相反：一个去找客服，一个去造塔。
+	if main.merit.merit < 4:
+		text(Vector2(266, 22), "只有塔的击杀", 12, Color(0.56, 0.74, 0.82, 0.92))
+		text(Vector2(266, 38), "才涨功勋", 12, Color(0.56, 0.74, 0.82, 0.92))
 
 	# 生命 / 波次 —— 右上
 	text_r(W - 24, 10, "生命", 15, DIM)
@@ -200,8 +218,14 @@ func _draw_wave_button() -> void:
 		var bonus: int = main.early_wave_bonus()
 		_panel(WAVE_BTN, 14.0, Color("#4A3A16"), Color("#2A2110"), AMBER)
 		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 8, "开波", 23, AMBER)
-		text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 38,
-			"第 %d 波 · 提前 +%d 金币" % [next_no, bonus], 12, Color("#E8D3A0"))
+		# 开局那 1.6 秒不谈折价：玩家连路在哪都没看清，「提前 +4 金币」
+		# 对他是个干扰项，会让他以为这游戏开局要先算数。
+		if main.is_opening():
+			text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 38,
+				"第 %d 波 正在逼近" % next_no, 13, Color("#E8D3A0"))
+		else:
+			text_c(WAVE_BTN.get_center().x, WAVE_BTN.position.y + 38,
+				"第 %d 波 · 提前 +%d 金币" % [next_no, bonus], 12, Color("#E8D3A0"))
 		var bar := Rect2(WAVE_BTN.position.x + 14, WAVE_BTN.end.y - 13, WAVE_BTN.size.x - 28, 5)
 		TDArt.fill(self, TDArt.round_rect(bar, 2.5, 3), Color(0, 0, 0, 0.45))
 		var ratio: float = main.prep_progress()
@@ -327,6 +351,20 @@ func _draw_cards() -> void:
 	var total: float = float(n) * CARD_W + float(n - 1) * CARD_GAP
 	var x0: float = (W - total) * 0.5
 
+	# 还没造第一座塔时，替玩家挑出「先点这张」。见 main.needs_first_tower_hint()。
+	var teach: bool = main.needs_first_tower_hint()
+	var teach_id: StringName = &""
+	if teach:
+		var best: int = 1 << 30
+		for i: int in range(n):
+			var d0: Dictionary = main.content.tower_def(StringName(str(ids[i])))
+			if d0.is_empty() or not main.merit.is_unlocked(int(d0.get("tier", 1))):
+				continue
+			var c0: int = int(d0.get("cost", 0))
+			if c0 < best:
+				best = c0
+				teach_id = StringName(str(ids[i]))
+
 	for i: int in range(n):
 		var id := StringName(str(ids[i]))
 		var def: Dictionary = main.content.tower_def(id)
@@ -337,6 +375,7 @@ func _draw_cards() -> void:
 		var locked: bool = not main.merit.is_unlocked(int(def.get("tier", 1)))
 		var selected: bool = main.build_id == id
 		var col := Color(str(def.get("color", "#8899AA")))
+		var teaching: bool = teach and not locked and id == teach_id and not selected
 
 		if locked:
 			_panel(r, 12.0, Color("#182430"), Color("#121B24"), Color("#243543"))
@@ -347,6 +386,19 @@ func _draw_cards() -> void:
 		if selected:
 			TDArt.glow(self, r.get_center(), 74.0, Color(0.88, 0.66, 0.24, 0.30))
 			draw_polyline(TDArt.closed(TDArt.round_rect(r.grow(-1.0), 12.0, 6)), AMBER, 2.5, true)
+		elif teaching:
+			# 呼吸式高亮 + 头顶一个朝下的小三角。不用箭头动画：手机上会分心，
+			# 而这张卡本身就在底部，三角从上方指下来，方向已经足够明确。
+			var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.0045)
+			TDArt.glow(self, r.get_center(), 62.0 + pulse * 12.0,
+				Color(0.98, 0.76, 0.30, 0.16 + pulse * 0.20))
+			draw_polyline(TDArt.closed(TDArt.round_rect(r.grow(-1.0), 12.0, 6)),
+				Color(AMBER.r, AMBER.g, AMBER.b, 0.50 + pulse * 0.45), 2.5, true)
+			var tipx: float = r.get_center().x
+			var tipy: float = CARD_Y - 7.0 - pulse * 4.0
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(tipx - 7.0, tipy - 9.0), Vector2(tipx + 7.0, tipy - 9.0),
+				Vector2(tipx, tipy)]), AMBER)
 
 		# 档位角标：圆角小chip，锁着的时候只给暗底
 		var badge := Rect2(x + 6, CARD_Y + 5, 26, 18)
